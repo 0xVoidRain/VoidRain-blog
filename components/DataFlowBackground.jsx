@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const DataFlowBackground = () => {
   const canvasRef = useRef(null);
+  const [enabled, setEnabled] = useState(true);
   
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -122,14 +123,14 @@ const DataFlowBackground = () => {
     // 创建粒子系统
     const particles = [];
     function createParticles() {
-      // 创建三层不同速度的粒子
-      for (let i = 0; i < 100; i++) {
+      // 减少粒子数量以提高性能 (原来是 100/150/100)
+      for (let i = 0; i < 50; i++) {
         particles.push(new Particle(1)); // 慢速层
       }
-      for (let i = 0; i < 150; i++) {
+      for (let i = 0; i < 80; i++) {
         particles.push(new Particle(2)); // 中速层
       }
-      for (let i = 0; i < 100; i++) {
+      for (let i = 0; i < 50; i++) {
         particles.push(new Particle(3)); // 快速层
       }
     }
@@ -172,9 +173,19 @@ const DataFlowBackground = () => {
   }, []);
 
   return (
-    <div className="fixed top-0 left-0 w-full h-full -z-10 bg-[#1A1C2E]">
-      <canvas ref={canvasRef} className="block w-full h-full"></canvas>
-    </div>
+    <>
+      {enabled && (
+        <div className="fixed top-0 left-0 w-full h-full -z-10 bg-[#1A1C2E]">
+          <canvas ref={canvasRef} className="block w-full h-full"></canvas>
+        </div>
+      )}
+      <button 
+        onClick={() => setEnabled(!enabled)}
+        className="fixed bottom-4 right-4 z-50 bg-[#1A1C2E] text-[#00FFE7] p-2 rounded-full opacity-70 hover:opacity-100"
+      >
+        {enabled ? '关闭' : '开启'}背景
+      </button>
+    </>
   );
 };
 
