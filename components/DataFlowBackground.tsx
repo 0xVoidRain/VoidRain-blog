@@ -1,4 +1,4 @@
-'use client'
+     'use client'
 
 import { useEffect, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
@@ -40,6 +40,8 @@ export default function DataFlowBackground() {
     // 初始化粒子
     function initParticles() {
       const particles: Particle[] = []
+      if (!canvas) return particles
+      
       const particleCount = Math.floor(canvas.width * canvas.height / 10000)
       
       // 根据主题设置颜色
@@ -64,10 +66,13 @@ export default function DataFlowBackground() {
       }
       
       particlesRef.current = particles
+      return particles
     }
     
     // 动画循环
     function animate() {
+      if (!canvas || !ctx) return
+      
       // 根据主题设置背景
       const bgColor = isDarkMode ?
         'rgba(10, 15, 30, 0.05)' :   // 暗色模式背景
@@ -167,4 +172,4 @@ export default function DataFlowBackground() {
       style={{ pointerEvents: 'none' }}
     />
   ) : null
-} 
+}    
