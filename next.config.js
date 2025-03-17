@@ -100,5 +100,8 @@ module.exports = () => {
     typescript: {
       ignoreBuildErrors: true,
     },
+    experimental: {
+      optimizeCss: true,
+    },
   })
 }
