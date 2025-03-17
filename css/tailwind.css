@@ -1,10 +1,12 @@
 /* 您现有的样式... */
 
 /* 数据流背景样式 */
+/* 
 .data-flow-bg {
   @apply fixed top-0 left-0 w-full h-full -z-10 bg-[#1A1C2E];
 }
 
 .data-flow-bg canvas {
   @apply block w-full h-full;
-} 
+}
+*/ 
