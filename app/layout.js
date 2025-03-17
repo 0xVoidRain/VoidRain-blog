@@ -1,3 +1,4 @@
+import '../css/tailwind.css';
 import DataFlowBackground from '../components/DataFlowBackground';
 
 export default function RootLayout({ children }) {
