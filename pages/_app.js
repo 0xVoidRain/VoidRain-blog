@@ -1,6 +1,5 @@
 import '../css/tailwind.css';
-// 暂时注释掉，直到解决 Tailwind 自定义类的问题
-// import '../css/prism.css'; 
+import '../css/prism.css'; // 使用简化版本的 prism.css
 import dynamic from 'next/dynamic';
 
 const DataFlowBackground = dynamic(
