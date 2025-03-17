@@ -1,4 +1,4 @@
-     'use client'
+'use client'
 
 import { useEffect, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
@@ -108,6 +108,8 @@ export default function DataFlowBackground() {
     
     // 连接临近的粒子
     function connectParticles(particle: Particle, index: number) {
+      if (!ctx) return;
+      
       // 根据主题设置连接线颜色
       const lineBaseColor = isDarkMode ?
         { r: 100, g: 180, b: 255 } :  // 暗色模式
@@ -172,4 +174,4 @@ export default function DataFlowBackground() {
       style={{ pointerEvents: 'none' }}
     />
   ) : null
-}    
+} 
