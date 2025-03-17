@@ -1,4 +1,4 @@
-import 'tailwindcss/tailwind.css';
+import '../css/tailwind.css';
 import dynamic from 'next/dynamic';
 
 const DataFlowBackground = dynamic(
