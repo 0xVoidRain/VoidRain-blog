@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useTheme } from 'next-themes'
+import React, { useEffect, useRef, useState } from 'react'
 
 interface Particle {
   x: number
@@ -16,11 +15,28 @@ interface Particle {
 export default function DataFlowBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const particlesRef = useRef<Particle[]>([])
-  const { resolvedTheme } = useTheme()
-  const isDarkMode = resolvedTheme === 'dark'
+  const [isDarkMode, setIsDarkMode] = useState(false)
   const [isVisible, setIsVisible] = useState(true)
   
+  // 检测系统暗色模式而不是使用next-themes
   useEffect(() => {
+    // 检查系统暗色模式
+    const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    setIsDarkMode(darkModeMediaQuery.matches)
+    
+    // 监听系统暗色模式变化
+    const handleDarkModeChange = (e: MediaQueryListEvent) => {
+      setIsDarkMode(e.matches)
+    }
+    
+    darkModeMediaQuery.addEventListener('change', handleDarkModeChange)
+    return () => {
+      darkModeMediaQuery.removeEventListener('change', handleDarkModeChange)
+    }
+  }, [])
+  
+  useEffect(() => {
+    console.log('DataFlowBackground mounted, isDarkMode:', isDarkMode)
     const canvas = canvasRef.current
     if (!canvas) return
     
@@ -42,7 +58,7 @@ export default function DataFlowBackground() {
       const particles: Particle[] = []
       if (!canvas) return particles
       
-      const particleCount = Math.floor(canvas.width * canvas.height / 10000)
+      const particleCount = Math.floor((canvas.width * canvas.height) / 15000)
       
       // 根据主题设置颜色
       const baseColor = isDarkMode ? 
@@ -144,7 +160,7 @@ export default function DataFlowBackground() {
       if (elapsed >= 1000) {
         const fps = frames / (elapsed / 1000)
         
-        if (fps < 30) {
+        if (fps < 15) {
           // 帧率太低，禁用动画或减少复杂度
           setIsVisible(false)
         }
@@ -170,9 +186,12 @@ export default function DataFlowBackground() {
   return isVisible ? (
     <canvas 
       ref={canvasRef} 
-      className="fixed top-0 left-0 w-full h-full -z-10 opacity-60"
-      style={{ pointerEvents: 'none' }}
+      className="fixed top-0 left-0 -z-10 h-full w-full opacity-60"
+      style={{ 
+        pointerEvents: 'none',
+        position: 'fixed',
+        zIndex: -1
+      }}
     />
   ) : null
-  
 } 
