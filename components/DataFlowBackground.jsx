@@ -175,13 +175,37 @@ const DataFlowBackground = () => {
   return (
     <>
       {enabled && (
-        <div className="fixed top-0 left-0 w-full h-full -z-10 bg-[#1A1C2E]">
-          <canvas ref={canvasRef} className="block w-full h-full"></canvas>
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          zIndex: -10,
+          backgroundColor: '#1A1C2E'
+        }}>
+          <canvas ref={canvasRef} style={{
+            display: 'block',
+            width: '100%',
+            height: '100%'
+          }}></canvas>
         </div>
       )}
       <button 
         onClick={() => setEnabled(!enabled)}
-        className="fixed bottom-4 right-4 z-50 bg-[#1A1C2E] text-[#00FFE7] p-2 rounded-full opacity-70 hover:opacity-100"
+        style={{
+          position: 'fixed',
+          bottom: '1rem',
+          right: '1rem',
+          zIndex: 50,
+          backgroundColor: '#1A1C2E',
+          color: '#00FFE7',
+          padding: '0.5rem',
+          borderRadius: '9999px',
+          opacity: 0.7
+        }}
+        onMouseOver={(e) => e.currentTarget.style.opacity = 1}
+        onMouseOut={(e) => e.currentTarget.style.opacity = 0.7}
       >
         {enabled ? '关闭' : '开启'}背景
       </button>
