@@ -3,6 +3,19 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
 
+// 定义粒子类型
+interface Particle {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  size: number
+  color: string
+  opacity: number
+  lifetime: number
+  age: number
+}
+
 // 定义流线粒子
 interface FlowParticle {
   x: number
@@ -44,15 +57,16 @@ interface GridNode {
 
 export default function DataFlowBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
-  const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null)
-  const particlesRef = useRef<FlowParticle[]>([])
+  const requestRef = useRef<number | null>(null)
+  const particlesRef = useRef<Particle[]>([])
   const flowLinesRef = useRef<FlowLine[]>([])
   const gridNodesRef = useRef<GridNode[]>([])
   const noiseFieldRef = useRef<number[][]>([])
   const timeRef = useRef<number>(0)
   const lastFrameTimeRef = useRef<number>(0)
   const energyLevelRef = useRef<number>(1)
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
+  const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null)
   const { theme } = useTheme()
 
   // 根据主题获取颜色
@@ -178,44 +192,6 @@ export default function DataFlowBackground() {
     gridNodesRef.current = nodes
   }
 
-  // 生成粒子
-  const createParticle = (x?: number, y?: number): FlowParticle => {
-    const colors = getThemeColors()
-    const colorSets = [colors.primary, colors.secondary, colors.accent]
-    const colorSet = colorSets[Math.floor(Math.random() * colorSets.length)]
-    
-    return {
-      x: x !== undefined ? x : Math.random() * dimensions.width,
-      y: y !== undefined ? y : Math.random() * dimensions.height,
-      vx: 0,
-      vy: 0,
-      size: 1 + Math.random() * 2,
-      color: colorSet[Math.floor(Math.random() * colorSet.length)],
-      opacity: 0.2 + Math.random() * 0.5,
-      lifetime: 5000 + Math.random() * 10000,
-      age: 0,
-      energy: Math.random()
-    }
-  }
-
-  // 创建流线
-  const createFlowLine = (x: number, y: number): FlowLine => {
-    const colors = getThemeColors()
-    const colorSets = [colors.primary, colors.secondary, colors.accent]
-    const colorSet = colorSets[Math.floor(Math.random() * colorSets.length)]
-    
-    return {
-      points: [{ x, y, age: 0 }],
-      width: 0.5 + Math.random() * 1.5,
-      color: colorSet[Math.floor(Math.random() * colorSet.length)],
-      speed: 0.5 + Math.random() * 2,
-      maxPoints: 50 + Math.floor(Math.random() * 100),
-      opacity: 0.2 + Math.random() * 0.6,
-      energy: Math.random(),
-      active: true
-    }
-  }
-
   // 设置画布尺寸
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -235,114 +211,36 @@ export default function DataFlowBackground() {
     }
   }, [])
 
-  // 鼠标交互与事件处理
+  // 鼠标交互
   useEffect(() => {
     if (typeof window === 'undefined') return
     
     const handleMouseMove = (e: MouseEvent) => {
       setMousePosition({ x: e.clientX, y: e.clientY })
-      
-      // 鼠标移动时在附近生成一些新流线
-      if (Math.random() > 0.7) {
-        const newLine = createFlowLine(
-          e.clientX + (Math.random() * 100 - 50),
-          e.clientY + (Math.random() * 100 - 50)
-        )
-        flowLinesRef.current.push(newLine)
-      }
     }
     
     const handleMouseLeave = () => {
       setMousePosition(null)
     }
     
-    // 点击产生涟漪效果
-    const handleClick = (e: MouseEvent) => {
-      energyLevelRef.current = Math.min(energyLevelRef.current + 0.5, 3)
-      
-      // 点击时创建一圈新粒子
-      for (let i = 0; i < 20; i++) {
-        const angle = (i / 20) * Math.PI * 2
-        const distance = 30 + Math.random() * 50
-        particlesRef.current.push(createParticle(
-          e.clientX + Math.cos(angle) * distance,
-          e.clientY + Math.sin(angle) * distance
-        ))
-      }
-      
-      // 创建多条从点击点扩散的流线
-      for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2
-        const newLine = createFlowLine(
-          e.clientX + Math.cos(angle) * 20,
-          e.clientY + Math.sin(angle) * 20
-        )
-        newLine.opacity *= 1.5 // 更明显的流线
-        flowLinesRef.current.push(newLine)
-      }
-      
-      // 激活周围的网格节点
-      gridNodesRef.current.forEach(node => {
-        const dx = node.x - e.clientX
-        const dy = node.y - e.clientY
-        const dist = Math.sqrt(dx * dx + dy * dy)
-        
-        if (dist < 200) {
-          node.active = true
-          node.energy = 1
-          node.lastPulse = timeRef.current
-        }
-      })
-      
-      setTimeout(() => {
-        energyLevelRef.current = Math.max(energyLevelRef.current - 0.5, 1)
-      }, 2000)
-    }
-
-    // 滚动影响
-    let lastScrollY = window.scrollY
-    let scrollTimeout: NodeJS.Timeout | null = null
-    
-    const handleScroll = () => {
-      const scrollDelta = Math.abs(window.scrollY - lastScrollY)
-      if (scrollDelta > 30) {
-        energyLevelRef.current = Math.min(energyLevelRef.current + 0.3, 3)
-        
-        if (scrollTimeout) {
-          clearTimeout(scrollTimeout)
-        }
-        
-        scrollTimeout = setTimeout(() => {
-          energyLevelRef.current = Math.max(energyLevelRef.current - 0.3, 1)
-        }, 1000)
-      }
-      
-      lastScrollY = window.scrollY
-    }
-    
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseleave', handleMouseLeave)
-    window.addEventListener('click', handleClick)
-    window.addEventListener('scroll', handleScroll, { passive: true })
     
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseleave', handleMouseLeave)
-      window.removeEventListener('click', handleClick)
-      window.removeEventListener('scroll', handleScroll)
-      if (scrollTimeout) clearTimeout(scrollTimeout)
     }
-  }, [dimensions])
+  }, [])
 
-  // 主渲染循环
+  // 主要动画和渲染
   useEffect(() => {
-    if (!canvasRef.current || !dimensions.width || !dimensions.height) return
+    if (!canvasRef.current || dimensions.width === 0 || dimensions.height === 0) return
     
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     
-    // 设置画布大小
+    // 设置画布尺寸
     canvas.width = dimensions.width
     canvas.height = dimensions.height
     
@@ -356,242 +254,43 @@ export default function DataFlowBackground() {
       initGridNodes(dimensions.width, dimensions.height)
     }
     
-    // 生成初始粒子
+    // 创建粒子
+    const createParticle = (x?: number, y?: number): Particle => {
+      const colors = theme === 'dark' 
+        ? ['rgba(0, 255, 157, 0.8)', 'rgba(32, 218, 244, 0.8)', 'rgba(138, 43, 226, 0.8)']
+        : ['rgba(0, 128, 128, 0.6)', 'rgba(30, 144, 255, 0.6)', 'rgba(106, 90, 205, 0.6)']
+      
+      return {
+        x: x ?? Math.random() * dimensions.width,
+        y: y ?? Math.random() * dimensions.height,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2,
+        size: 1 + Math.random() * 2,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        opacity: 0.3 + Math.random() * 0.5,
+        lifetime: 5000 + Math.random() * 5000,
+        age: 0
+      }
+    }
+    
+    // 初始化粒子
     if (particlesRef.current.length === 0) {
       for (let i = 0; i < 100; i++) {
         particlesRef.current.push(createParticle())
       }
     }
     
-    // 生成初始流线
-    if (flowLinesRef.current.length === 0) {
-      for (let i = 0; i < 15; i++) {
-        flowLinesRef.current.push(createFlowLine(
-          Math.random() * dimensions.width,
-          Math.random() * dimensions.height
-        ))
-      }
-    }
-    
-    // 渲染函数
+    // 渲染循环
     const render = (timestamp: number) => {
       // 计算时间增量
-      const deltaTime = lastFrameTimeRef.current ? timestamp - lastFrameTimeRef.current : 16
-      lastFrameTimeRef.current = timestamp
+      const deltaTime = timestamp - (timeRef.current || timestamp)
       timeRef.current = timestamp
       
-      const energyLevel = energyLevelRef.current
-      const colors = getThemeColors()
-      
-      // 清空画布，添加微弱背景
-      ctx.fillStyle = colors.background
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      
-      // 绘制网格和连接线
-      ctx.lineWidth = 0.5
-      ctx.strokeStyle = colors.grid
-      
-      gridNodesRef.current.forEach((node, i) => {
-        // 节点移动 (轻微波动)
-        const time = timestamp * 0.001
-        node.x = node.baseX + Math.sin(time * 0.2 + i * 0.1) * 8
-        node.y = node.baseY + Math.cos(time * 0.3 + i * 0.1) * 8
-        
-        // 节点活跃状态随时间变化
-        if (Math.random() < 0.001 * energyLevel) {
-          node.active = !node.active
-        }
-        
-        // 激活周围节点
-        if (node.active && timestamp - node.lastPulse > 2000 + Math.random() * 5000) {
-          node.lastPulse = timestamp
-          node.connections.forEach(j => {
-            const connectedNode = gridNodesRef.current[j]
-            if (Math.random() < 0.7) {
-              connectedNode.active = true
-              connectedNode.energy = 0.7 + Math.random() * 0.3
-              connectedNode.lastPulse = timestamp - 1000 * Math.random()
-            }
-          })
-        }
-        
-        // 随着时间流逝，能量减少
-        if (timestamp - node.lastPulse < 2000) {
-          node.energy = Math.max(node.energy - 0.01, 0)
-        }
-        
-        // 绘制连接线
-        if (node.active) {
-          node.connections.forEach(j => {
-            const connectedNode = gridNodesRef.current[j]
-            if (connectedNode.active) {
-              const energyFactor = (node.energy + connectedNode.energy) / 2
-              
-              // 根据能量级别设置线段样式
-              const gradient = ctx.createLinearGradient(
-                node.x, node.y, connectedNode.x, connectedNode.y
-              )
-              
-              const color1 = theme === 'dark' 
-                ? `rgba(0, 255, 157, ${0.2 * energyFactor})` 
-                : `rgba(0, 128, 128, ${0.15 * energyFactor})`
-              
-              const color2 = theme === 'dark' 
-                ? `rgba(32, 218, 244, ${0.2 * energyFactor})` 
-                : `rgba(0, 168, 255, ${0.15 * energyFactor})`
-              
-              gradient.addColorStop(0, color1)
-              gradient.addColorStop(1, color2)
-              
-              ctx.beginPath()
-              ctx.strokeStyle = gradient
-              ctx.lineWidth = 0.5 + energyFactor * 1.5
-              ctx.moveTo(node.x, node.y)
-              ctx.lineTo(connectedNode.x, connectedNode.y)
-              ctx.stroke()
-              
-              // 有时在线上添加流动粒子
-              if (Math.random() < 0.001 * energyLevel) {
-                const t = Math.random()
-                const x = node.x * (1 - t) + connectedNode.x * t
-                const y = node.y * (1 - t) + connectedNode.y * t
-                particlesRef.current.push(createParticle(x, y))
-              }
-            }
-          })
-        }
-        
-        // 绘制节点
-        if (node.active) {
-          const energyFactor = node.energy
-          const nodeSize = node.size * (1 + energyFactor)
-          
-          // 绘制光晕
-          const glow = ctx.createRadialGradient(
-            node.x, node.y, 0,
-            node.x, node.y, nodeSize * 5
-          )
-          
-          const glowColor = theme === 'dark' 
-            ? `rgba(0, 255, 200, ${0.15 * energyFactor})` 
-            : `rgba(0, 168, 255, ${0.1 * energyFactor})`
-          
-          glow.addColorStop(0, glowColor)
-          glow.addColorStop(1, 'rgba(0, 0, 0, 0)')
-          
-          ctx.beginPath()
-          ctx.fillStyle = glow
-          ctx.arc(node.x, node.y, nodeSize * 5, 0, Math.PI * 2)
-          ctx.fill()
-          
-          // 绘制节点中心
-          const nodeColor = theme === 'dark' 
-            ? `rgba(0, 255, 200, ${0.5 + 0.5 * energyFactor})` 
-            : `rgba(0, 168, 255, ${0.4 + 0.4 * energyFactor})`
-          
-          ctx.beginPath()
-          ctx.fillStyle = nodeColor
-          ctx.arc(node.x, node.y, nodeSize, 0, Math.PI * 2)
-          ctx.fill()
-        }
-      })
-      
-      // 更新和绘制流线
-      flowLinesRef.current = flowLinesRef.current.filter(line => {
-        if (!line.active) return false
-        
-        // 向流线添加新点
-        if (line.points.length > 0 && line.points.length < line.maxPoints) {
-          const lastPoint = line.points[line.points.length - 1]
-          
-          // 获取该位置的流动信息
-          const flow = getFlow(lastPoint.x, lastPoint.y)
-          
-          // 根据流向和强度计算新位置
-          const speed = line.speed * flow.strength * energyLevel
-          const newX = lastPoint.x + Math.cos(flow.angle) * speed * (deltaTime / 16)
-          const newY = lastPoint.y + Math.sin(flow.angle) * speed * (deltaTime / 16)
-          
-          // 如果点没有移出画布，则添加它
-          if (newX >= 0 && newX < dimensions.width && newY >= 0 && newY < dimensions.height) {
-            line.points.push({ x: newX, y: newY, age: 0 })
-          } else {
-            line.active = false
-          }
-        }
-        
-        // 更新所有点的年龄
-        line.points.forEach(point => {
-          point.age += deltaTime
-        })
-        
-        // 当第一个点足够老时，移除它
-        if (line.points.length > 1 && line.points[0].age > 1000) {
-          line.points.shift()
-        }
-        
-        // 如果所有点都被移除，销毁流线
-        if (line.points.length === 0) {
-          return false
-        }
-        
-        // 绘制流线
-        if (line.points.length > 1) {
-          ctx.beginPath()
-          
-          // 创建沿线渐变
-          const gradient = ctx.createLinearGradient(
-            line.points[0].x, line.points[0].y,
-            line.points[line.points.length - 1].x, line.points[line.points.length - 1].y
-          )
-          
-          const [r, g, b] = extractRGB(line.color)
-          
-          gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`)
-          gradient.addColorStop(0.3, `rgba(${r}, ${g}, ${b}, ${line.opacity})`)
-          gradient.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, ${line.opacity})`)
-          gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`)
-          
-          ctx.strokeStyle = gradient
-          ctx.lineWidth = line.width
-          
-          // 绘制平滑的曲线
-          ctx.moveTo(line.points[0].x, line.points[0].y)
-          
-          for (let i = 0; i < line.points.length - 1; i++) {
-            const xc = (line.points[i].x + line.points[i+1].x) / 2
-            const yc = (line.points[i].y + line.points[i+1].y) / 2
-            ctx.quadraticCurveTo(line.points[i].x, line.points[i].y, xc, yc)
-          }
-          
-          const last = line.points.length - 1
-          if (last > 0) {
-            ctx.quadraticCurveTo(
-              line.points[last - 1].x, line.points[last - 1].y,
-              line.points[last].x, line.points[last].y
-            )
-          }
-          
-          ctx.stroke()
-          
-          // 有时在流线端点添加粒子
-          if (Math.random() < 0.03 * energyLevel && line.points.length > 0) {
-            const lastPoint = line.points[line.points.length - 1]
-            particlesRef.current.push(createParticle(lastPoint.x, lastPoint.y))
-          }
-        }
-        
-        return true
-      })
-      
-      // 确保始终有足够的流线
-      const targetLineCount = 15 + Math.floor(energyLevel * 10)
-      while (flowLinesRef.current.length < targetLineCount) {
-        flowLinesRef.current.push(createFlowLine(
-          Math.random() * dimensions.width,
-          Math.random() * dimensions.height
-        ))
-      }
+      // 清除画布，使用半透明背景以创建拖尾效果
+      ctx.fillStyle = theme === 'dark' 
+        ? 'rgba(10, 15, 30, 0.1)' 
+        : 'rgba(240, 245, 255, 0.1)'
+      ctx.fillRect(0, 0, dimensions.width, dimensions.height)
       
       // 更新和绘制粒子
       particlesRef.current = particlesRef.current.filter(particle => {
@@ -601,13 +300,11 @@ export default function DataFlowBackground() {
           return false
         }
         
-        // 根据流场更新粒子速度
-        const flow = getFlow(particle.x, particle.y)
+        // 添加一些随机波动
+        particle.vx += (Math.random() - 0.5) * 0.05
+        particle.vy += (Math.random() - 0.5) * 0.05
         
-        particle.vx = particle.vx * 0.95 + Math.cos(flow.angle) * flow.strength * 0.5
-        particle.vy = particle.vy * 0.95 + Math.sin(flow.angle) * flow.strength * 0.5
-        
-        // 鼠标影响粒子
+        // 鼠标影响
         if (mousePosition) {
           const dx = mousePosition.x - particle.x
           const dy = mousePosition.y - particle.y
@@ -620,42 +317,43 @@ export default function DataFlowBackground() {
           }
         }
         
-        // 更新位置
-        particle.x += particle.vx * (deltaTime / 16) * energyLevel
-        particle.y += particle.vy * (deltaTime / 16) * energyLevel
+        // 限制最大速度
+        const speed = Math.sqrt(particle.vx * particle.vx + particle.vy * particle.vy)
+        if (speed > 3) {
+          particle.vx = (particle.vx / speed) * 3
+          particle.vy = (particle.vy / speed) * 3
+        }
         
-        // 如果离开画布，重生在画布顶部
+        // 更新位置
+        particle.x += particle.vx
+        particle.y += particle.vy
+        
+        // 如果离开画布，重置位置
         if (particle.x < 0 || particle.x > dimensions.width || 
             particle.y < 0 || particle.y > dimensions.height) {
           particle.x = Math.random() * dimensions.width
-          particle.y = Math.random() * 10
+          particle.y = Math.random() * dimensions.height
           particle.age = 0
           return true
         }
         
-        // 计算当前不透明度（淡入淡出）
+        // 计算不透明度（淡入淡出）
         let currentOpacity = particle.opacity
         if (particle.age < 500) {
-          // 淡入
           currentOpacity *= particle.age / 500
-        } else if (particle.age > particle.lifetime - 800) {
-          // 淡出
-          currentOpacity *= (particle.lifetime - particle.age) / 800
+        } else if (particle.age > particle.lifetime - 500) {
+          currentOpacity *= (particle.lifetime - particle.age) / 500
         }
         
         // 提取RGB值
         const [r, g, b] = extractRGB(particle.color)
         
-        // 绘制粒子
-        const size = particle.size * (0.8 + 0.4 * Math.sin(timestamp * 0.005 + particle.energy * 10))
-        
         // 绘制发光效果
-        const glowSize = size * 3
+        const glowSize = particle.size * 3
         const glow = ctx.createRadialGradient(
           particle.x, particle.y, 0,
           particle.x, particle.y, glowSize
         )
-        
         glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${currentOpacity * 0.6})`)
         glow.addColorStop(1, 'rgba(0, 0, 0, 0)')
         
@@ -666,16 +364,35 @@ export default function DataFlowBackground() {
         
         // 绘制粒子核心
         ctx.beginPath()
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${currentOpacity * 1.2})`
-        ctx.arc(particle.x, particle.y, size, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${currentOpacity})`
+        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2)
         ctx.fill()
+        
+        // 连接近距离的粒子
+        particlesRef.current.forEach(other => {
+          if (other === particle) return
+          
+          const dx = other.x - particle.x
+          const dy = other.y - particle.y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          
+          if (dist < 100) {
+            const opacity = (1 - dist / 100) * 0.2 * currentOpacity
+            
+            ctx.beginPath()
+            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${opacity})`
+            ctx.lineWidth = (1 - dist / 100) * 0.5
+            ctx.moveTo(particle.x, particle.y)
+            ctx.lineTo(other.x, other.y)
+            ctx.stroke()
+          }
+        })
         
         return true
       })
       
       // 确保始终有足够的粒子
-      const targetParticleCount = 80 + Math.floor(energyLevel * 20)
-      while (particlesRef.current.length < targetParticleCount) {
+      while (particlesRef.current.length < 100) {
         particlesRef.current.push(createParticle())
       }
       
@@ -683,7 +400,7 @@ export default function DataFlowBackground() {
       requestRef.current = requestAnimationFrame(render)
     }
     
-    // 提取RGB值从rgba字符串
+    // 提取RGB值
     function extractRGB(rgba: string): number[] {
       const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
       if (match) {
