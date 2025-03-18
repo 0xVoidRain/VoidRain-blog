@@ -1,7 +1,9 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
+import { useTheme } from 'next-themes'
 
+// 定义虚空雨滴类型
 interface VoidDrop {
   x: number
   y: number
@@ -12,6 +14,20 @@ interface VoidDrop {
   tail: number
   lifetime: number
   age: number
+  flickerRate: number
+  lastFlicker: number
+}
+
+// 定义虚空能量波纹类型
+interface VoidRipple {
+  x: number
+  y: number
+  radius: number
+  maxRadius: number
+  opacity: number
+  color: string
+  lineWidth: number
+  speed: number
 }
 
 export default function DataFlowBackground() {
@@ -20,8 +36,48 @@ export default function DataFlowBackground() {
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null)
   const requestRef = useRef<number | null>(null)
   const voidDropsRef = useRef<VoidDrop[]>([])
+  const voidRipplesRef = useRef<VoidRipple[]>([])
   const timeRef = useRef<number>(0)
+  const lastFrameTimeRef = useRef<number>(0)
   const intensityRef = useRef<number>(1)
+  const { theme } = useTheme()
+
+  // 根据主题获取颜色
+  const getThemeColors = () => {
+    if (theme === 'dark') {
+      return {
+        drops: [
+          'rgba(103, 232, 249, 0.8)', // 青色
+          'rgba(162, 155, 254, 0.8)', // 紫色
+          'rgba(129, 230, 217, 0.8)', // 青绿
+          'rgba(79, 209, 197, 0.8)',  // 浅绿蓝
+          'rgba(108, 99, 255, 0.8)'   // 亮紫
+        ],
+        ripples: [
+          'rgba(129, 140, 248, 0.8)', // 靛蓝
+          'rgba(192, 132, 252, 0.8)', // 亮紫
+          'rgba(56, 189, 248, 0.8)'   // 天蓝
+        ],
+        background: 'rgba(15, 23, 42, 0.03)' // 深蓝背景，非常透明
+      }
+    } else {
+      return {
+        drops: [
+          'rgba(79, 70, 229, 0.7)',   // 靛蓝
+          'rgba(139, 92, 246, 0.7)',  // 紫色
+          'rgba(6, 182, 212, 0.7)',   // 青色
+          'rgba(45, 212, 191, 0.7)',  // 绿松石
+          'rgba(99, 102, 241, 0.7)'   // 靛蓝
+        ],
+        ripples: [
+          'rgba(79, 70, 229, 0.6)',   // 靛蓝
+          'rgba(124, 58, 237, 0.6)',  // 紫色
+          'rgba(14, 165, 233, 0.6)'   // 天蓝
+        ],
+        background: 'rgba(241, 245, 249, 0.015)' // 浅色背景，非常透明
+      }
+    }
+  }
 
   // 设置画布尺寸
   useEffect(() => {
@@ -42,7 +98,7 @@ export default function DataFlowBackground() {
     }
   }, [])
 
-  // 鼠标交互
+  // 鼠标交互与事件处理
   useEffect(() => {
     if (typeof window === 'undefined') return
     
@@ -54,9 +110,13 @@ export default function DataFlowBackground() {
       setMousePosition(null)
     }
     
-    // 点击增加雨滴强度
-    const handleClick = () => {
+    // 点击创建虚空波纹
+    const handleClick = (e: MouseEvent) => {
       intensityRef.current = Math.min(intensityRef.current + 0.5, 3)
+      
+      // 创建虚空波纹
+      createVoidRipple(e.clientX, e.clientY)
+      
       setTimeout(() => {
         intensityRef.current = Math.max(intensityRef.current - 0.5, 1)
       }, 2000)
@@ -93,8 +153,26 @@ export default function DataFlowBackground() {
       window.removeEventListener('mouseleave', handleMouseLeave)
       window.removeEventListener('click', handleClick)
       window.removeEventListener('scroll', handleScroll)
+      if (scrollTimeout) clearTimeout(scrollTimeout)
     }
   }, [])
+
+  // 创建虚空波纹
+  const createVoidRipple = (x: number, y: number) => {
+    const colors = getThemeColors().ripples
+    const color = colors[Math.floor(Math.random() * colors.length)]
+    
+    voidRipplesRef.current.push({
+      x,
+      y,
+      radius: 0,
+      maxRadius: 100 + Math.random() * 150,
+      opacity: 0.8,
+      color,
+      lineWidth: 1 + Math.random() * 2,
+      speed: 1 + Math.random() * 2
+    })
+  }
 
   // 主渲染循环
   useEffect(() => {
@@ -110,7 +188,7 @@ export default function DataFlowBackground() {
     
     // 初始化虚空雨滴
     const initVoidDrops = () => {
-      const initialCount = Math.floor((dimensions.width * dimensions.height) / 15000)
+      const initialCount = Math.floor((dimensions.width * dimensions.height) / 18000)
       const drops: VoidDrop[] = []
       
       for (let i = 0; i < initialCount; i++) {
@@ -122,71 +200,74 @@ export default function DataFlowBackground() {
     
     // 创建新的虚空雨滴
     const createVoidDrop = (): VoidDrop => {
-      // 基础颜色：深蓝、紫色、青色
-      const colors = [
-        'rgba(34, 87, 122, 0.8)',  // 深海蓝
-        'rgba(87, 24, 158, 0.8)',  // 迷幻紫
-        'rgba(0, 183, 196, 0.8)',  // 科技青
-        'rgba(15, 52, 96, 0.8)'    // 暗夜蓝
-      ]
+      const colors = getThemeColors().drops
+      const color = colors[Math.floor(Math.random() * colors.length)]
       
       return {
         x: Math.random() * dimensions.width,
-        y: Math.random() * dimensions.height - dimensions.height, // 从屏幕顶部之上开始
+        y: Math.random() * dimensions.height - dimensions.height, // 开始在屏幕上方
         speed: 1 + Math.random() * 3,
-        size: 1 + Math.random() * 3,
-        opacity: 0.1 + Math.random() * 0.7,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        tail: 10 + Math.random() * 40, // 尾迹长度
-        lifetime: 5000 + Math.random() * 10000, // 生命周期5-15秒
-        age: 0
+        size: 0.5 + Math.random() * 1.5,
+        opacity: 0.3 + Math.random() * 0.7,
+        color,
+        tail: 20 + Math.random() * 40, // 较长的尾迹
+        lifetime: 10000 + Math.random() * 15000, // 较长的生命周期
+        age: 0,
+        flickerRate: Math.random() * 0.1, // 闪烁速率
+        lastFlicker: 0
       }
     }
     
-    // 初始化
-    initVoidDrops()
+    // 初始化虚空雨滴
+    if (voidDropsRef.current.length === 0) {
+      initVoidDrops()
+    }
     
     // 渲染循环
     const render = (timestamp: number) => {
-      if (!ctx) return
+      if (!canvasRef.current) return
       
-      // 计算时间差
-      const deltaTime = timestamp - timeRef.current
-      timeRef.current = timestamp
+      // 计算帧间隔时间
+      const deltaTime = lastFrameTimeRef.current ? timestamp - lastFrameTimeRef.current : 16.7
+      lastFrameTimeRef.current = timestamp
+      timeRef.current += deltaTime
       
-      // 清除画布，使用半透明黑色以创建残影效果
-      ctx.fillStyle = 'rgba(8, 10, 20, 0.15)'
+      // 清空画布，添加轻微的背景色以配合主题
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.fillStyle = getThemeColors().background
       ctx.fillRect(0, 0, canvas.width, canvas.height)
       
-      // 根据强度决定每帧新增雨滴数量
-      const newDropsPerFrame = 0.1 * intensityRef.current
-      
-      // 累积小数部分，当超过1时创建新雨滴
-      voidDropsRef.current.newDropsFraction = (voidDropsRef.current.newDropsFraction || 0) + newDropsPerFrame
-      while (voidDropsRef.current.newDropsFraction >= 1) {
-        voidDropsRef.current.push(createVoidDrop())
-        voidDropsRef.current.newDropsFraction -= 1
-      }
-      
-      // 创建虚空中的暗光效果
-      if (mousePosition) {
-        const gradient = ctx.createRadialGradient(
-          mousePosition.x, mousePosition.y, 0,
-          mousePosition.x, mousePosition.y, 300
-        )
-        gradient.addColorStop(0, 'rgba(35, 10, 60, 0.3)')
-        gradient.addColorStop(0.5, 'rgba(35, 10, 60, 0.1)')
-        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)')
+      // 更新和渲染波纹
+      voidRipplesRef.current = voidRipplesRef.current.filter(ripple => {
+        ripple.radius += ripple.speed * (deltaTime / 16)
+        ripple.opacity -= 0.003 * (deltaTime / 16)
         
-        ctx.fillStyle = gradient
+        if (ripple.opacity <= 0 || ripple.radius >= ripple.maxRadius) {
+          return false
+        }
+        
+        const [r, g, b] = extractRGB(ripple.color)
         ctx.beginPath()
-        ctx.arc(mousePosition.x, mousePosition.y, 300, 0, Math.PI * 2)
-        ctx.fill()
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${ripple.opacity})`
+        ctx.lineWidth = ripple.lineWidth
+        ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2)
+        ctx.stroke()
+        
+        return true
+      })
+      
+      // 动态调整雨滴数量基于强度
+      const targetDropCount = Math.floor((dimensions.width * dimensions.height) / 18000) * intensityRef.current
+      
+      // 如果雨滴不足，添加更多
+      while (voidDropsRef.current.length < targetDropCount) {
+        const newDrop = createVoidDrop()
+        newDrop.y = -10 - Math.random() * 50 // 确保从顶部开始
+        voidDropsRef.current.push(newDrop)
       }
       
-      // 更新和渲染所有雨滴
+      // 更新和渲染雨滴
       voidDropsRef.current = voidDropsRef.current.filter(drop => {
-        // 更新雨滴年龄
         drop.age += deltaTime
         
         // 移除超过生命周期的雨滴
@@ -194,15 +275,24 @@ export default function DataFlowBackground() {
           return false
         }
         
-        // 计算当前透明度基于生命周期
-        let currentOpacity = drop.opacity
+        // 计算闪烁效果
+        let flickerOpacity = 1
+        if (timeRef.current - drop.lastFlicker > 500) {
+          if (Math.random() < drop.flickerRate) {
+            flickerOpacity = 0.3 + Math.random() * 0.7
+            drop.lastFlicker = timeRef.current
+          }
+        }
+        
+        // 计算当前透明度基于生命周期和闪烁
+        let currentOpacity = drop.opacity * flickerOpacity
         // 淡入淡出效果
-        if (drop.age < 500) {
+        if (drop.age < 800) {
           // 淡入
-          currentOpacity = drop.opacity * (drop.age / 500)
-        } else if (drop.age > drop.lifetime - 800) {
+          currentOpacity = drop.opacity * (drop.age / 800) * flickerOpacity
+        } else if (drop.age > drop.lifetime - 1200) {
           // 淡出
-          currentOpacity = drop.opacity * ((drop.lifetime - drop.age) / 800)
+          currentOpacity = drop.opacity * ((drop.lifetime - drop.age) / 1200) * flickerOpacity
         }
         
         // 更新位置
@@ -215,10 +305,23 @@ export default function DataFlowBackground() {
           const distance = Math.sqrt(dx * dx + dy * dy)
           
           if (distance < 200) {
-            // 雨滴会被鼠标略微吸引同时加速
-            const attractFactor = 0.03 * (1 - distance / 200)
-            drop.x += dx * attractFactor
-            moveSpeed += 2 * (1 - distance / 200)
+            // 雨滴会被鼠标略微吸引同时加速或减速
+            const attractFactor = 0.05 * (1 - distance / 200)
+            
+            // 根据距离中心的距离决定吸引或排斥
+            // 临界点约为100像素
+            if (distance < 80) {
+              // 靠近中心的雨滴被排斥并减速
+              drop.x -= dx * attractFactor * 1.5
+              moveSpeed *= 0.8
+            } else {
+              // 远离中心的雨滴被吸引并加速
+              drop.x += dx * attractFactor
+              moveSpeed *= 1.5
+            }
+            
+            // 在鼠标周围雨滴稍微变亮
+            currentOpacity *= 1.3
           }
         }
         
@@ -228,10 +331,11 @@ export default function DataFlowBackground() {
         if (drop.y > dimensions.height) {
           drop.y = -5 - Math.random() * 20 // 略微随机化重生位置
           drop.x = Math.random() * dimensions.width // 重新随机化X位置
+          drop.age = 0 // 重置生命周期
           return true
         }
         
-        // 绘制雨滴
+        // 提取RGB值
         const [r, g, b] = extractRGB(drop.color)
         
         // 绘制雨滴尾迹（径向渐变效果）
@@ -240,8 +344,9 @@ export default function DataFlowBackground() {
           drop.x, drop.y
         )
         
-        // 计算尾部颜色（淡出）
+        // 调整尾部颜色和透明度
         gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`)
+        gradient.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${currentOpacity * 0.3})`)
         gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${currentOpacity})`)
         
         ctx.beginPath()
@@ -258,12 +363,13 @@ export default function DataFlowBackground() {
         ctx.fill()
         
         // 发光效果
-        const glowSize = drop.size * 3
+        const glowSize = drop.size * 4
         const glow = ctx.createRadialGradient(
           drop.x, drop.y, 0,
           drop.x, drop.y, glowSize
         )
         glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${currentOpacity * 0.8})`)
+        glow.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, ${currentOpacity * 0.2})`)
         glow.addColorStop(1, 'rgba(0, 0, 0, 0)')
         
         ctx.beginPath()
@@ -295,7 +401,7 @@ export default function DataFlowBackground() {
         cancelAnimationFrame(requestRef.current)
       }
     }
-  }, [dimensions, mousePosition])
+  }, [dimensions, mousePosition, theme]) // 添加theme作为依赖，以便主题变化时重新渲染
 
   if (typeof window === 'undefined') return null
 
