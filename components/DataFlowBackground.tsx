@@ -298,30 +298,25 @@ export default function DataFlowBackground() {
         // 更新位置
         let moveSpeed = drop.speed
         
-        // 鼠标交互：光标周围雨滴速度变化
+        // 鼠标交互：所有雨滴都被鼠标吸引
         if (mousePosition) {
           const dx = mousePosition.x - drop.x
           const dy = mousePosition.y - drop.y
           const distance = Math.sqrt(dx * dx + dy * dy)
           
           if (distance < 200) {
-            // 雨滴会被鼠标略微吸引同时加速或减速
-            const attractFactor = 0.05 * (1 - distance / 200)
+            // 雨滴会被鼠标吸引，距离越近吸引力越大
+            const attractFactor = 0.08 * (1 - distance / 200)
             
-            // 根据距离中心的距离决定吸引或排斥
-            // 临界点约为100像素
-            if (distance < 80) {
-              // 靠近中心的雨滴被排斥并减速
-              drop.x -= dx * attractFactor * 1.5
-              moveSpeed *= 0.8
-            } else {
-              // 远离中心的雨滴被吸引并加速
-              drop.x += dx * attractFactor
-              moveSpeed *= 1.5
-            }
+            // 所有雨滴都被吸引
+            drop.x += dx * attractFactor
+            drop.y += dy * attractFactor * 0.5 // Y轴吸引力略小，保持整体向下流动感
             
-            // 在鼠标周围雨滴稍微变亮
-            currentOpacity *= 1.3
+            // 距离越近，雨滴移动速度越快
+            moveSpeed *= 1 + (1 - distance / 200)
+            
+            // 在鼠标周围雨滴变亮
+            currentOpacity *= 1.5 * (1 - distance / 300)
           }
         }
         
