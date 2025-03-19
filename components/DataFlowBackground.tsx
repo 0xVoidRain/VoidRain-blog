@@ -29,6 +29,16 @@ interface RainDrop {
   color: string
 }
 
+interface FlowLine {
+  points: { x: number; y: number; age: number }[]
+  width: number
+  colorRatio: number
+  speed: number
+  opacity: number
+  maxPoints: number
+  headSize: number
+}
+
 export default function DataFlowBackground() {
   const { theme } = useTheme()
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -41,7 +51,7 @@ export default function DataFlowBackground() {
   
   // 动画状态引用 - 将burstsRef改为rainDropsRef
   const nodesRef = useRef<GridNode[]>([])
-  const linesRef = useRef<any[]>([])
+  const linesRef = useRef<FlowLine[]>([])
   const rainDropsRef = useRef<RainDrop[]>([])
   const timeRef = useRef(0)
   const rotationRef = useRef(0)
@@ -179,7 +189,305 @@ export default function DataFlowBackground() {
     }
   }
   
-  // 更新雨滴
+  // 添加缺失的函数: 更新网格节点
+  const updateNodes = (deltaTime: number) => {
+    const nodes = nodesRef.current
+    const time = timeRef.current
+    const centerX = dimensions.width / 2
+    const centerY = dimensions.height / 2
+    
+    nodes.forEach(node => {
+      // 更新相位
+      node.phase += node.speed * deltaTime
+      
+      // 计算到中心的距离和方向
+      const dx = node.baseX - centerX
+      const dy = node.baseY - centerY
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      const maxDist = Math.sqrt(centerX * centerX + centerY * centerY)
+      const distRatio = dist / maxDist
+      
+      // 扭曲因子 - 螺旋状
+      const spiralFactor = (1 - distRatio) * 30
+      const angle = Math.atan2(dy, dx) + rotationRef.current * (1 - distRatio)
+      
+      // 计算扭曲后的位置
+      const offsetX = Math.sin(node.phase + time / 1000) * 10 * (1 - distRatio)
+      const offsetY = Math.cos(node.phase + time / 1000) * 10 * (1 - distRatio)
+      
+      node.x = node.baseX + Math.cos(angle) * spiralFactor + offsetX
+      node.y = node.baseY + Math.sin(angle) * spiralFactor + offsetY
+      
+      // 如果有鼠标位置，计算鼠标影响
+      if (mousePosition) {
+        const mdx = mousePosition.x - node.x
+        const mdy = mousePosition.y - node.y
+        const mouseDist = Math.sqrt(mdx * mdx + mdy * mdy)
+        const influenceRadius = 200
+        
+        if (mouseDist < influenceRadius) {
+          const influenceFactor = (1 - mouseDist / influenceRadius) * 0.5
+          node.energy = Math.min(1, node.energy + influenceFactor * 0.1)
+          node.active = true
+          
+          // 随机触发光爆粒子
+          if (Math.random() < influenceFactor * 0.02) {
+            addRainDrop(node.x, node.y)
+          }
+        } else {
+          node.energy = Math.max(0.1, node.energy - 0.01 * deltaTime)
+          node.active = false
+        }
+      } else {
+        node.energy = Math.max(0.1, node.energy - 0.01 * deltaTime)
+        node.active = false
+      }
+      
+      // 随机触发光爆
+      if (Math.random() < 0.0002) {
+        addRainDrop(node.x, node.y)
+      }
+    })
+  }
+  
+  // 添加缺失的函数: 绘制网格
+  const drawGrid = (ctx: CanvasRenderingContext2D) => {
+    const nodes = nodesRef.current
+    const isDark = theme === 'dark'
+    
+    // 设置基本样式
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    
+    // 绘制线条
+    for (let i = 0; i < nodes.length; i++) {
+      const node1 = nodes[i]
+      
+      for (let j = i + 1; j < nodes.length; j++) {
+        const node2 = nodes[j]
+        
+        // 只连接相邻的节点
+        const dx = Math.abs(node1.baseX - node2.baseX)
+        const dy = Math.abs(node1.baseY - node2.baseY)
+        
+        if (dx <= 100 && dy <= 100) {
+          // 计算能量平均值和距离
+          const energy = (node1.energy + node2.energy) / 2
+          const distance = Math.sqrt(
+            (node1.x - node2.x) * (node1.x - node2.x) +
+            (node1.y - node2.y) * (node1.y - node2.y)
+          )
+          
+          // 只绘制能量高或距离近的连接
+          if (energy > 0.2 || distance < 80) {
+            const opacity = Math.min(0.4, energy * (1 - distance / 150))
+            
+            if (opacity > 0.02) {
+              const color = getGradientColor(energy)
+              ctx.strokeStyle = color
+              ctx.globalAlpha = opacity
+              ctx.lineWidth = 0.5 + energy
+              
+              // 绘制扭曲线条
+              ctx.beginPath()
+              ctx.moveTo(node1.x, node1.y)
+              
+              // 使用贝塞尔曲线增加扭曲感
+              const midX = (node1.x + node2.x) / 2
+              const midY = (node1.y + node2.y) / 2
+              const offset = Math.sin(timeRef.current / 1000 + (node1.phase + node2.phase) / 2) * 10 * energy
+              
+              ctx.quadraticCurveTo(
+                midX + offset,
+                midY + offset,
+                node2.x,
+                node2.y
+              )
+              
+              ctx.stroke()
+            }
+          }
+        }
+      }
+    }
+    
+    // 绘制节点
+    nodes.forEach(node => {
+      const size = node.size * (1 + node.energy)
+      
+      if (node.active) {
+        ctx.globalAlpha = node.energy * 0.8
+        ctx.fillStyle = getGradientColor(node.energy)
+        ctx.shadowBlur = size * 3
+        ctx.shadowColor = getGradientColor(node.energy)
+        
+        ctx.beginPath()
+        ctx.arc(node.x, node.y, size, 0, Math.PI * 2)
+        ctx.fill()
+        
+        ctx.shadowBlur = 0
+      } else if (node.energy > 0.2) {
+        ctx.globalAlpha = node.energy * 0.5
+        ctx.fillStyle = getGradientColor(node.energy)
+        
+        ctx.beginPath()
+        ctx.arc(node.x, node.y, size, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    })
+    
+    ctx.globalAlpha = 1
+  }
+  
+  // 添加缺失的函数: 更新流线
+  const updateFlowLines = (deltaTime: number) => {
+    const lines = linesRef.current
+    const nodes = nodesRef.current
+    
+    lines.forEach(line => {
+      const points = line.points
+      const lastPoint = points[points.length - 1]
+      
+      // 更新所有点的年龄
+      for (let i = 0; i < points.length; i++) {
+        points[i].age += deltaTime
+      }
+      
+      // 如果最后一个点过老，添加新点
+      if (points.length < line.maxPoints && lastPoint.age > 1) {
+        // 计算下一个点的方向
+        let dirX = 0
+        let dirY = 0
+        
+        // 如果有足够的点，使用最后几个点确定方向
+        if (points.length >= 3) {
+          const p1 = points[points.length - 3]
+          const p2 = points[points.length - 2]
+          const p3 = points[points.length - 1]
+          
+          // 使用后两个点的方向
+          dirX = (p3.x - p2.x) + (p2.x - p1.x) * 0.5
+          dirY = (p3.y - p2.y) + (p2.y - p1.y) * 0.5
+          
+          // 标准化方向向量
+          const len = Math.sqrt(dirX * dirX + dirY * dirY) || 1
+          dirX = dirX / len * line.speed * deltaTime * 15
+          dirY = dirY / len * line.speed * deltaTime * 15
+        } else {
+          // 如果点不够，使用随机方向
+          const angle = Math.random() * Math.PI * 2
+          dirX = Math.cos(angle) * line.speed * deltaTime * 15
+          dirY = Math.sin(angle) * line.speed * deltaTime * 15
+        }
+        
+        // 寻找最近的网格节点并受其影响
+        let closestNode = null
+        let closestDist = Infinity
+        
+        for (const node of nodes) {
+          if (node.energy > 0.3) {
+            const dx = node.x - lastPoint.x
+            const dy = node.y - lastPoint.y
+            const dist = Math.sqrt(dx * dx + dy * dy)
+            
+            if (dist < closestDist && dist < 200) {
+              closestDist = dist
+              closestNode = node
+            }
+          }
+        }
+        
+        // 如果有近的节点，调整方向
+        if (closestNode) {
+          const influence = Math.min(1, 0.5 / (closestDist / 100))
+          dirX = dirX * (1 - influence) + (closestNode.x - lastPoint.x) * influence * 0.1
+          dirY = dirY * (1 - influence) + (closestNode.y - lastPoint.y) * influence * 0.1
+        }
+        
+        // 添加新点
+        points.push({
+          x: lastPoint.x + dirX,
+          y: lastPoint.y + dirY,
+          age: 0
+        })
+        
+        // 如果线超出边界，重置到新位置
+        const point = points[points.length - 1]
+        if (
+          point.x < -50 || point.x > dimensions.width + 50 ||
+          point.y < -50 || point.y > dimensions.height + 50
+        ) {
+          // 清空点
+          points.length = 0
+          
+          // 随机新起点
+          const startX = Math.random() * dimensions.width
+          const startY = Math.random() * dimensions.height
+          
+          // 初始化新点
+          for (let j = 0; j < 3; j++) {
+            points.push({
+              x: startX,
+              y: startY,
+              age: j * 2
+            })
+          }
+        }
+      }
+      
+      // 如果点太多，删除最老的
+      if (points.length > line.maxPoints) {
+        points.shift()
+      }
+    })
+  }
+  
+  // 绘制流线
+  const drawFlowLines = (ctx: CanvasRenderingContext2D) => {
+    const lines = linesRef.current
+    
+    lines.forEach(line => {
+      const points = line.points
+      
+      if (points.length < 2) return
+      
+      // 获取流线颜色
+      const color = getGradientColor(line.colorRatio)
+      
+      // 绘制流线
+      ctx.strokeStyle = color
+      ctx.lineWidth = line.width
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.globalAlpha = line.opacity
+      
+      ctx.beginPath()
+      ctx.moveTo(points[0].x, points[0].y)
+      
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y)
+      }
+      
+      ctx.stroke()
+      
+      // 绘制头部
+      const head = points[points.length - 1]
+      ctx.globalAlpha = line.opacity * 1.5
+      ctx.fillStyle = color
+      ctx.shadowBlur = line.headSize * 3
+      ctx.shadowColor = color
+      
+      ctx.beginPath()
+      ctx.arc(head.x, head.y, line.headSize, 0, Math.PI * 2)
+      ctx.fill()
+      
+      ctx.shadowBlur = 0
+    })
+    
+    ctx.globalAlpha = 1
+  }
+  
+  // 添加缺失的函数: 更新雨滴
   const updateRainDrops = (deltaTime: number) => {
     rainDropsRef.current.forEach((drop, i) => {
       // 更新生命周期
@@ -256,307 +564,13 @@ export default function DataFlowBackground() {
     })
   }
   
-  // 修改动画循环以包含雨滴更新和绘制
-  const animate = (time: number) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    
-    // 计算时间增量
-    const deltaTime = Math.min(30, time - (timeRef.current || time))
-    timeRef.current = time
-    
-    // 更新旋转角度
-    rotationRef.current = (rotationRef.current + deltaTime * 0.05) % (Math.PI * 2)
-    
-    // 故障效果计时
-    glitchTimeRef.current += deltaTime
-    
-    // 每隔一段时间触发故障效果
-    if (glitchTimeRef.current > 3000 && Math.random() < 0.01) {
-      glitchActiveRef.current = true
-      setTimeout(() => {
-        glitchActiveRef.current = false
-      }, 200)
-      glitchTimeRef.current = 0
-    }
-    
-    // 清空画布
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    
-    // 更新和绘制网格节点
-    updateNodes(deltaTime)
-    drawGrid(ctx)
-    
-    // 更新和绘制流线
-    updateFlowLines(deltaTime)
-    drawFlowLines(ctx)
-    
-    // 更新和绘制雨滴
-    updateRainDrops(deltaTime)
-    drawRainDrops(ctx)
-    
-    // 应用故障效果
-    if (glitchActiveRef.current) {
-      applyGlitchEffect(ctx, canvas.width, canvas.height)
-    }
-    
-    // 继续动画循环
-    requestRef.current = requestAnimationFrame(animate)
-  }
-  
-  // 绘制扭曲网格
-  const drawDistortedGrid = (ctx: CanvasRenderingContext2D, deltaTime: number) => {
-    const nodes = nodesRef.current
-    const time = timeRef.current
-    
-    // 网格连接距离阈值
-    const connectionThreshold = 150
-    const mouseRadius = 200
-    
-    // 更新节点位置和状态
-    nodes.forEach((node, index) => {
-      // 螺旋波动效应
-      const spiralFactor = 0.3
-      const distortionFactor = 15
-      
-      // 基于当前旋转角度和节点相对位置计算螺旋扭曲
-      const centerX = dimensions.width / 2
-      const centerY = dimensions.height / 2
-      const distToCenter = Math.sqrt((node.baseX - centerX) ** 2 + (node.baseY - centerY) ** 2)
-      const angleToCenter = Math.atan2(node.baseY - centerY, node.baseX - centerX)
-      
-      // 计算旋转和扭曲
-      const rotatedAngle = angleToCenter + rotationRef.current * (1 - distToCenter / Math.max(dimensions.width, dimensions.height))
-      const spiralDist = distToCenter * (1 + Math.sin(time * 0.0005 + index * 0.05) * spiralFactor)
-      
-      // 应用波浪扭曲
-      const waveX = Math.sin(time * 0.001 + node.phase + node.baseY * 0.01) * distortionFactor
-      const waveY = Math.cos(time * 0.001 + node.phase + node.baseX * 0.01) * distortionFactor
-      
-      // 更新节点位置
-      node.x = centerX + Math.cos(rotatedAngle) * spiralDist + waveX
-      node.y = centerY + Math.sin(rotatedAngle) * spiralDist + waveY
-      
-      // 检查鼠标交互
-      if (mousePosition) {
-        const dx = mousePosition.x - node.x
-        const dy = mousePosition.y - node.y
-        const distToMouse = Math.sqrt(dx * dx + dy * dy)
-        
-        if (distToMouse < mouseRadius) {
-          const influenceFactor = 1 - distToMouse / mouseRadius
-          node.energy = Math.min(1, node.energy + influenceFactor * deltaTime * 2)
-          node.active = true
-          
-          // 随机触发光爆粒子
-          if (Math.random() < influenceFactor * 0.02) {
-            addRainDrop(node.x, node.y)
-          }
-        } else {
-          node.active = false
-          node.energy = Math.max(0, node.energy - deltaTime * 0.5)
-        }
-      } else {
-        node.active = false
-        node.energy = Math.max(0, node.energy - deltaTime * 0.5)
-      }
-      
-      // 随机触发光爆
-      if (Math.random() < 0.0002) {
-        addRainDrop(node.x, node.y)
-      }
-    })
-    
-    // 绘制网格连接
-    ctx.lineWidth = 0.5
-    
-    for (let i = 0; i < nodes.length; i++) {
-      const nodeA = nodes[i]
-      
-      for (let j = i + 1; j < nodes.length; j++) {
-        const nodeB = nodes[j]
-        const dx = nodeB.x - nodeA.x
-        const dy = nodeB.y - nodeA.y
-        const dist = Math.sqrt(dx * dx + dy * dy)
-        
-        if (dist < connectionThreshold) {
-          // 计算两个节点的平均能量和距离衰减
-          const avgEnergy = (nodeA.energy + nodeB.energy) * 0.5
-          const opacity = (1 - dist / connectionThreshold) * avgEnergy * 0.8
-          
-          if (opacity > 0.05) {
-            // 根据距离和能量计算渐变比例
-            const gradientRatio = (dist / connectionThreshold + time * 0.0001) % 1
-            const color = getGradientColor(gradientRatio)
-            
-            ctx.strokeStyle = color
-            ctx.globalAlpha = opacity
-            ctx.beginPath()
-            ctx.moveTo(nodeA.x, nodeA.y)
-            
-            // 添加扭曲曲线
-            const controlX = (nodeA.x + nodeB.x) / 2 + Math.sin(time * 0.001 + i * 0.1) * 20
-            const controlY = (nodeA.y + nodeB.y) / 2 + Math.cos(time * 0.001 + j * 0.1) * 20
-            
-            ctx.quadraticCurveTo(controlX, controlY, nodeB.x, nodeB.y)
-            ctx.stroke()
-          }
-        }
-      }
-    }
-    
-    // 绘制节点
-    nodes.forEach(node => {
-      if (node.energy > 0.1) {
-        const size = node.size * (1 + node.energy * 2)
-        ctx.globalAlpha = node.energy * 0.8
-        ctx.fillStyle = node.active ? colors.accent2 : colors.accent1
-        
-        // 绘制辉光效果
-        ctx.shadowBlur = size * 3
-        ctx.shadowColor = node.active ? colors.accent2 : colors.accent1
-        
-        ctx.beginPath()
-        ctx.arc(node.x, node.y, size, 0, Math.PI * 2)
-        ctx.fill()
-        
-        ctx.shadowBlur = 0
-      }
-    })
-    
-    ctx.globalAlpha = 1
-  }
-  
-  // 绘制流线
-  const drawFlowLines = (ctx: CanvasRenderingContext2D, deltaTime: number) => {
-    const lines = linesRef.current
-    const nodes = nodesRef.current
-    const time = timeRef.current
-    
-    lines.forEach(line => {
-      // 更新线条颜色 - 缓慢变化
-      line.colorRatio = (line.colorRatio + deltaTime * 0.1) % 1
-      
-      // 更新流线位置
-      if (line.points.length > 0) {
-        // 获取最后一个点
-        const lastPoint = line.points[line.points.length - 1]
-        
-        // 增加点的年龄
-        line.points.forEach(point => {
-          point.age += deltaTime
-        })
-        
-        // 移除年龄过大的点
-        while (line.points.length > 0 && line.points[0].age > 10) {
-          line.points.shift()
-        }
-        
-        // 添加新的点
-        if (line.points.length > 0) {
-          // 计算方向向量 - 受周围节点影响
-          let dirX = Math.cos(time * 0.0002 + line.colorRatio * Math.PI * 2) * line.speed
-          let dirY = Math.sin(time * 0.0002 + line.colorRatio * Math.PI * 2) * line.speed
-          
-          // 寻找最近的节点
-          let closestNode = null
-          let closestDist = Infinity
-          
-          for (const node of nodes) {
-            if (node.energy > 0.2) {
-              const dx = node.x - lastPoint.x
-              const dy = node.y - lastPoint.y
-              const dist = Math.sqrt(dx * dx + dy * dy)
-              
-              if (dist < closestDist && dist < 200) {
-                closestDist = dist
-                closestNode = node
-              }
-            }
-          }
-          
-          // 受最近节点影响
-          if (closestNode) {
-            const influence = Math.min(1, 0.5 / (closestDist / 100))
-            dirX = dirX * (1 - influence) + (closestNode.x - lastPoint.x) * influence * 0.1
-            dirY = dirY * (1 - influence) + (closestNode.y - lastPoint.y) * influence * 0.1
-          }
-          
-          // 添加新点
-          const newX = lastPoint.x + dirX
-          const newY = lastPoint.y + dirY
-          
-          // 检查是否越界
-          if (newX < 0 || newX > dimensions.width || newY < 0 || newY > dimensions.height) {
-            // 重新生成在可见区域内
-            line.points = [{
-              x: Math.random() * dimensions.width,
-              y: Math.random() * dimensions.height,
-              age: 0
-            }]
-          } else {
-            // 添加新点
-            line.points.push({
-              x: newX,
-              y: newY,
-              age: 0
-            })
-            
-            // 限制点的数量
-            if (line.points.length > line.maxPoints) {
-              line.points.shift()
-            }
-          }
-        }
-      }
-      
-      // 绘制线条
-      if (line.points.length > 1) {
-        // 使用渐变色
-        const color = getGradientColor(line.colorRatio)
-        
-        ctx.beginPath()
-        ctx.strokeStyle = color
-        ctx.lineWidth = line.width
-        ctx.globalAlpha = line.opacity * (theme === 'dark' ? 1 : 0.6)
-        
-        // 绘制平滑曲线
-        ctx.moveTo(line.points[0].x, line.points[0].y)
-        
-        for (let i = 0; i < line.points.length - 1; i++) {
-          const xc = (line.points[i].x + line.points[i + 1].x) / 2
-          const yc = (line.points[i].y + line.points[i + 1].y) / 2
-          ctx.quadraticCurveTo(line.points[i].x, line.points[i].y, xc, yc)
-        }
-        
-        ctx.stroke()
-        ctx.globalAlpha = theme === 'dark' ? 1 : 0.7
-        
-        // 绘制头部
-        const head = line.points[line.points.length - 1]
-        ctx.beginPath()
-        ctx.fillStyle = color
-        ctx.shadowBlur = line.headSize * 2
-        ctx.shadowColor = color
-        ctx.arc(head.x, head.y, line.headSize, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.shadowBlur = 0
-      }
-    })
-  }
-  
   // 应用故障艺术效果
   const applyGlitchEffect = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
     const imageData = ctx.getImageData(0, 0, width, height)
     const data = imageData.data
     
     // RGB通道错位
-    const channelShift = Math.floor(Math.random() * 20) - 10
-    
-    // 应用于部分区域
+    const channelShift = Math.floor(Math.random() * 8) - 4
     const glitchY = Math.floor(Math.random() * height)
     const glitchHeight = Math.floor(Math.random() * 100) + 50
     
@@ -601,6 +615,57 @@ export default function DataFlowBackground() {
     }
     
     ctx.putImageData(imageData, 0, 0)
+  }
+  
+  // 动画循环
+  const animate = (time: number) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    
+    // 计算时间增量
+    const deltaTime = Math.min(30, time - (timeRef.current || time))
+    timeRef.current = time
+    
+    // 更新旋转角度
+    rotationRef.current = (rotationRef.current + deltaTime * 0.0001) % (Math.PI * 2)
+    
+    // 故障效果计时
+    glitchTimeRef.current += deltaTime
+    
+    // 每隔一段时间触发故障效果
+    if (glitchTimeRef.current > 3000 && Math.random() < 0.01) {
+      glitchActiveRef.current = true
+      setTimeout(() => {
+        glitchActiveRef.current = false
+      }, 200)
+      glitchTimeRef.current = 0
+    }
+    
+    // 清空画布
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    
+    // 更新和绘制网格节点
+    updateNodes(deltaTime)
+    drawGrid(ctx)
+    
+    // 更新和绘制流线
+    updateFlowLines(deltaTime)
+    drawFlowLines(ctx)
+    
+    // 更新和绘制雨滴
+    updateRainDrops(deltaTime)
+    drawRainDrops(ctx)
+    
+    // 应用故障效果
+    if (glitchActiveRef.current) {
+      applyGlitchEffect(ctx, canvas.width, canvas.height)
+    }
+    
+    // 继续动画循环
+    requestRef.current = requestAnimationFrame(animate)
   }
   
   // 窗口大小变化处理
