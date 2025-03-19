@@ -7,421 +7,367 @@ export default function DataFlowBackground() {
   const { theme } = useTheme()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const requestRef = useRef<number>()
-  const contextRef = useRef<CanvasRenderingContext2D | null>(null)
+  const isDraggingRef = useRef(false)
+  const dragNodeRef = useRef<number | null>(null)
   
-  // 状态和引用
   const [dimensions, setDimensions] = useState({
     width: typeof window !== 'undefined' ? window.innerWidth : 1200,
     height: typeof window !== 'undefined' ? window.innerHeight : 800
   })
   
-  const timeRef = useRef(0)
+  // 网格系统
   const gridRef = useRef<{
-    nodes: any[],
-    resolution: number,
-    stiffness: number,
-    damping: number,
-    propagation: number,
-    flowSpeed: number,
-    flowScale: number,
-    interactionRadius: number
+    nodes: any[];
+    springs: any[];
+    restDistance: number;
+    stiffness: number;
+    damping: number;
   }>({
     nodes: [],
-    resolution: 24,  // 网格分辨率（节点间距）
-    stiffness: 0.3,  // 网格刚性（0-1）
-    damping: 0.85,   // 阻尼因子
-    propagation: 0.4, // 变形传播系数
-    flowSpeed: 0.002, // 流动速度
-    flowScale: 15,    // 流动幅度比例
-    interactionRadius: 150 // 交互影响半径
+    springs: [],
+    restDistance: 0,
+    stiffness: 0.03,
+    damping: 0.8
   })
   
-  // 鼠标状态
-  const mouseRef = useRef<{
-    position: {x: number, y: number} | null,
-    isDown: boolean,
-    dragging: {index: number, offsetX: number, offsetY: number} | null,
-  }>({
-    position: null,
-    isDown: false,
-    dragging: null
-  })
+  // 波纹数组
+  const ripplesRef = useRef<any[]>([])
   
-  // 颜色配置
+  // 颜色设置
   const colors = {
-    // 冷暖对比色系
-    primary: 'rgba(0, 247, 255, 0.8)', // 主色-青色
-    secondary: 'rgba(255, 107, 53, 0.7)', // 辅色-橙色
-    tertiary: 'rgba(149, 0, 255, 0.6)', // 第三色-紫色
-    darkBg: 'rgba(10, 15, 25, 0.97)',
-    lightBg: 'rgba(245, 248, 250, 0.97)'
+    gridColor: theme === 'dark' ? 'rgba(0, 247, 255, 0.8)' : 'rgba(0, 120, 255, 0.5)',
+    rippleColor: theme === 'dark' ? 'rgba(255, 107, 53, 0.6)' : 'rgba(255, 107, 53, 0.4)', 
+    nodeColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.8)' : 'rgba(100, 100, 255, 0.6)',
+    darkBg: 'rgba(10, 10, 25, 0.95)',
+    lightBg: 'rgba(245, 245, 255, 0.95)'
   }
   
-  // 创建流体网格
-  const createFluidGrid = (width: number, height: number, resolution: number) => {
-    const nodes = []
+  // 初始化网格
+  const initGrid = (width: number, height: number) => {
+    const gridSpacing = Math.max(30, Math.min(width, height) / 25)
+    const cols = Math.floor(width / gridSpacing) + 2
+    const rows = Math.floor(height / gridSpacing) + 2
     
-    // 计算网格尺寸
-    const cols = Math.ceil(width / resolution) + 1
-    const rows = Math.ceil(height / resolution) + 1
+    const nodes = []
+    const springs = []
     
     // 创建网格节点
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
-        const posX = x * resolution
-        const posY = y * resolution
-        
         nodes.push({
-          x: posX,                  // 当前x位置
-          y: posY,                  // 当前y位置
-          baseX: posX,              // 基础x位置
-          baseY: posY,              // 基础y位置
-          vx: 0,                    // x方向速度
-          vy: 0,                    // y方向速度
-          forceX: 0,                // x方向受力
-          forceY: 0,                // y方向受力
-          phase: Math.random() * Math.PI * 2,  // 随机相位
-          speed: 0.5 + Math.random() * 0.5,    // 随机速度
-          flowOffset: Math.random() * 100,     // 流体偏移
-          mass: 1,                  // 质量
-          isFixed: false,           // 是否固定
-          isControlPoint: false,    // 是否为控制点
-          col: x,                   // 列索引
-          row: y,                   // 行索引
-          connections: []           // 连接的节点索引
+          x: x * gridSpacing,
+          y: y * gridSpacing,
+          oldX: x * gridSpacing,
+          oldY: y * gridSpacing,
+          originalX: x * gridSpacing,
+          originalY: y * gridSpacing,
+          vx: 0,
+          vy: 0,
+          mass: 1 + Math.random() * 0.5,  // 不同质量使网格变形更自然
+          pinned: false,  // 边缘节点固定
+          pressure: 0,     // 存储压力值
+          neighbors: []    // 存储相邻节点索引
         })
       }
     }
     
-    // 建立节点连接关系
+    // 固定边缘节点
     for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i]
-      const { col, row } = node
+      const x = i % cols
+      const y = Math.floor(i / cols)
       
-      // 连接相邻的节点（上、右、下、左）
-      const connections = []
-      
-      // 上方节点
-      if (row > 0) {
-        connections.push(i - cols)
-      }
-      
-      // 右侧节点
-      if (col < cols - 1) {
-        connections.push(i + 1)
-      }
-      
-      // 下方节点
-      if (row < rows - 1) {
-        connections.push(i + cols)
-      }
-      
-      // 左侧节点
-      if (col > 0) {
-        connections.push(i - 1)
-      }
-      
-      // 存储连接关系
-      node.connections = connections
-    }
-    
-    // 设置边界节点为固定点以保持整体稳定
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i]
-      const { col, row } = node
-      
-      // 边界节点
-      if (col === 0 || col === cols - 1 || row === 0 || row === rows - 1) {
-        node.isFixed = true
-      }
-      
-      // 随机设置一些控制点（用于复杂变形）
-      if (Math.random() < 0.03 && !node.isFixed) {
-        node.isControlPoint = true
+      if (x === 0 || y === 0 || x === cols - 1 || y === rows - 1) {
+        nodes[i].pinned = true
       }
     }
     
-    return nodes
-  }
-  
-  // 使用径向基函数(RBF)计算节点影响
-  const applyRadialInfluence = (nodeIndex: number, force: {x: number, y: number}, radius: number) => {
-    const nodes = gridRef.current.nodes
-    const sourceNode = nodes[nodeIndex]
-    
+    // 创建弹簧连接
     for (let i = 0; i < nodes.length; i++) {
-      if (i === nodeIndex) continue
+      const x = i % cols
+      const y = Math.floor(i / cols)
       
-      const node = nodes[i]
-      const dx = node.x - sourceNode.x
-      const dy = node.y - sourceNode.y
-      const distance = Math.sqrt(dx * dx + dy * dy)
-      
-      if (distance < radius) {
-        // 计算径向影响力（基于距离的衰减）
-        const influence = (1 - distance / radius) ** 2 * gridRef.current.propagation
-        
-        // 应用力
-        node.forceX += force.x * influence
-        node.forceY += force.y * influence
+      // 水平弹簧
+      if (x < cols - 1) {
+        springs.push({
+          nodeA: i,
+          nodeB: i + 1,
+          length: gridSpacing,
+          stiffness: 0.2 + Math.random() * 0.1
+        })
       }
+      
+      // 垂直弹簧
+      if (y < rows - 1) {
+        springs.push({
+          nodeA: i,
+          nodeB: i + cols,
+          length: gridSpacing,
+          stiffness: 0.2 + Math.random() * 0.1
+        })
+      }
+      
+      // 对角线弹簧 (增加稳定性)
+      if (x < cols - 1 && y < rows - 1) {
+        springs.push({
+          nodeA: i,
+          nodeB: i + cols + 1,
+          length: gridSpacing * Math.sqrt(2),
+          stiffness: 0.08 + Math.random() * 0.05
+        })
+      }
+      
+      if (x > 0 && y < rows - 1) {
+        springs.push({
+          nodeA: i,
+          nodeB: i + cols - 1,
+          length: gridSpacing * Math.sqrt(2),
+          stiffness: 0.08 + Math.random() * 0.05
+        })
+      }
+      
+      // 存储邻居节点
+      nodes[i].neighbors = springs
+        .filter(s => s.nodeA === i || s.nodeB === i)
+        .map(s => s.nodeA === i ? s.nodeB : s.nodeA)
+    }
+    
+    return {
+      nodes,
+      springs,
+      restDistance: gridSpacing,
+      stiffness: 0.03,
+      damping: 0.8
     }
   }
   
-  // 流体网格更新
-  const updateFluidGrid = (deltaTime: number) => {
-    const { nodes, stiffness, damping, flowSpeed, flowScale } = gridRef.current
-    const timestamp = timeRef.current
+  // 创建波纹
+  const createRipple = (x: number, y: number, force: number = 1) => {
+    ripplesRef.current.push({
+      x,
+      y,
+      radius: 0,
+      maxRadius: 200 + Math.random() * 150,
+      speed: 3 + Math.random() * 2,
+      life: 1,
+      force: force
+    })
+  }
+  
+  // 更新网格物理
+  const updateGridPhysics = (deltaTime: number) => {
+    const grid = gridRef.current
+    const damping = Math.min(0.9, grid.damping)
     
-    // 模拟物理运动
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i]
-      
-      if (node.isFixed) continue // 跳过固定节点
-      
-      // 弹簧力（将节点拉回基础位置）
-      node.forceX = (node.baseX - node.x) * stiffness
-      node.forceY = (node.baseY - node.y) * stiffness
-      
-      // 流体运动力（使用简化的流体模拟）
-      const flowX = Math.sin(timestamp * flowSpeed + node.flowOffset + node.x * 0.02) * flowScale
-      const flowY = Math.cos(timestamp * flowSpeed + node.flowOffset + node.y * 0.01) * flowScale * 0.5
-      
-      node.forceX += flowX
-      node.forceY += flowY
-    }
-    
-    // 处理节点间的连接关系（像布料一样）
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i]
-      
-      if (node.isFixed) continue
-      
-      // 连接节点间的相互影响
-      for (const connIdx of node.connections) {
-        const connectedNode = nodes[connIdx]
-        const dx = connectedNode.x - node.x
-        const dy = connectedNode.y - node.y
-        const distance = Math.sqrt(dx * dx + dy * dy)
-        const baseDistance = Math.sqrt(
-          (connectedNode.baseX - node.baseX) ** 2 +
-          (connectedNode.baseY - node.baseY) ** 2
-        )
-        
-        // 如果当前距离与基础距离不同，施加力使其恢复
-        if (Math.abs(distance - baseDistance) > 0.1) {
-          const forceMagnitude = (distance - baseDistance) * 0.1
-          const forceX = (dx / distance) * forceMagnitude
-          const forceY = (dy / distance) * forceMagnitude
-          
-          if (!connectedNode.isFixed) {
-            connectedNode.forceX += forceX
-            connectedNode.forceY += forceY
-          }
-          
-          node.forceX -= forceX
-          node.forceY -= forceY
-        }
-      }
-    }
-    
-    // 鼠标交互影响
-    if (mouseRef.current.position && mouseRef.current.isDown && !mouseRef.current.dragging) {
-      const { x, y } = mouseRef.current.position
-      const radius = gridRef.current.interactionRadius
-      
-      for (let i = 0; i < nodes.length; i++) {
-        const node = nodes[i]
-        if (node.isFixed) continue
-        
-        const dx = node.x - x
-        const dy = node.y - y
-        const distance = Math.sqrt(dx * dx + dy * dy)
-        
-        if (distance < radius) {
-          const influence = (1 - distance / radius) ** 2 * 20
-          const angle = Math.atan2(dy, dx)
-          
-          node.forceX += Math.cos(angle) * influence
-          node.forceY += Math.sin(angle) * influence
-        }
-      }
-    }
-    
-    // 拖拽节点处理
-    if (mouseRef.current.dragging) {
-      const { index, offsetX, offsetY } = mouseRef.current.dragging
-      const mousePos = mouseRef.current.position
-      
-      if (mousePos) {
-        const node = nodes[index]
-        
-        // 直接设置拖拽节点位置
-        node.x = mousePos.x - offsetX
-        node.y = mousePos.y - offsetY
-        node.vx = 0
-        node.vy = 0
-        
-        // 对周围节点施加影响
-        applyRadialInfluence(
-          index, 
-          { x: 0, y: 0 }, // 拖拽时不需要额外力，位置已直接设置
-          gridRef.current.interactionRadius * 1.5
-        )
-      }
-    }
+    // 应用外部力 (流体波动)
+    const time = Date.now() * 0.001
+    const windForce = Math.sin(time * 0.3) * 0.2
     
     // 更新节点位置
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i]
+    for (let i = 0; i < grid.nodes.length; i++) {
+      const node = grid.nodes[i]
       
-      if (node.isFixed || (mouseRef.current.dragging && mouseRef.current.dragging.index === i)) {
-        continue
+      if (node.pinned) continue
+      
+      // 保存旧位置用于计算速度
+      const oldX = node.x
+      const oldY = node.y
+      
+      // 应用流体力和节点间相互作用
+      // 使用Verlet积分更新位置
+      const vx = (node.x - node.oldX) * damping
+      const vy = (node.y - node.oldY) * damping + 0.1 // 轻微重力
+      
+      // 更新旧位置
+      node.oldX = node.x
+      node.oldY = node.y
+      
+      // 流体波动效果 
+      const noiseX = Math.sin(time * 0.5 + node.originalX * 0.01) * 0.3
+      const noiseY = Math.cos(time * 0.4 + node.originalY * 0.01) * 0.3
+      
+      // 应用波纹力
+      let rippleForce = {x: 0, y: 0}
+      
+      for (const ripple of ripplesRef.current) {
+        const dx = node.x - ripple.x
+        const dy = node.y - ripple.y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        
+        // 如果节点在波纹半径±10的范围内，应用力
+        const ringWidth = 20
+        if (Math.abs(dist - ripple.radius) < ringWidth) {
+          const force = ripple.force * (1 - Math.abs(dist - ripple.radius) / ringWidth) * ripple.life
+          const angle = Math.atan2(dy, dx)
+          rippleForce.x += Math.cos(angle) * force
+          rippleForce.y += Math.sin(angle) * force
+        }
       }
       
-      // 应用物理引擎计算
-      // 速度 = 速度 + 加速度（力/质量）
-      node.vx += node.forceX / node.mass
-      node.vy += node.forceY / node.mass
-      
-      // 应用阻尼（摩擦力）
-      node.vx *= damping
-      node.vy *= damping
-      
       // 更新位置
-      node.x += node.vx * deltaTime * 0.1
-      node.y += node.vy * deltaTime * 0.1
+      node.x += vx + noiseX + rippleForce.x + windForce
+      node.y += vy + noiseY + rippleForce.y
       
-      // 重置力
-      node.forceX = 0
-      node.forceY = 0
+      // 计算新速度
+      node.vx = node.x - oldX
+      node.vy = node.y - oldY
+    }
+    
+    // 应用弹簧约束
+    for (let i = 0; i < grid.springs.length; i++) {
+      const spring = grid.springs[i]
+      const nodeA = grid.nodes[spring.nodeA]
+      const nodeB = grid.nodes[spring.nodeB]
+      
+      const dx = nodeB.x - nodeA.x
+      const dy = nodeB.y - nodeA.y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      
+      // 计算弹簧力
+      const springForce = (distance - spring.length) * spring.stiffness
+      
+      const fx = (dx / distance) * springForce
+      const fy = (dy / distance) * springForce
+      
+      // 应用力
+      if (!nodeA.pinned) {
+        nodeA.x += fx
+        nodeA.y += fy
+      }
+      
+      if (!nodeB.pinned) {
+        nodeB.x -= fx
+        nodeB.y -= fy
+      }
+    }
+    
+    // 更新波纹
+    for (let i = ripplesRef.current.length - 1; i >= 0; i--) {
+      const ripple = ripplesRef.current[i]
+      
+      ripple.radius += ripple.speed
+      ripple.life -= 0.008
+      
+      if (ripple.life <= 0 || ripple.radius > ripple.maxRadius) {
+        ripplesRef.current.splice(i, 1)
+      }
     }
   }
   
-  // 绘制流体网格
-  const drawFluidGrid = (ctx: CanvasRenderingContext2D) => {
-    const { nodes } = gridRef.current
+  // 绘制网格
+  const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    const grid = gridRef.current
     const isDark = theme === 'dark'
     
-    // 绘制连接线
-    ctx.strokeStyle = isDark ? colors.primary : 'rgba(0, 100, 255, 0.4)'
+    // 设置线条样式
     ctx.lineWidth = 1
+    ctx.strokeStyle = colors.gridColor
     
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i]
+    // 绘制弹簧连接
+    ctx.beginPath()
+    for (let i = 0; i < grid.springs.length; i++) {
+      const spring = grid.springs[i]
+      const nodeA = grid.nodes[spring.nodeA]
+      const nodeB = grid.nodes[spring.nodeB]
       
-      for (const connIdx of node.connections) {
-        // 只绘制"向右"和"向下"的连接，避免重复
-        if (connIdx > i) {
-          const connectedNode = nodes[connIdx]
-          
-          // 计算线条颜色（基于节点距离）
-          const baseDistance = Math.sqrt(
-            (connectedNode.baseX - node.baseX) ** 2 +
-            (connectedNode.baseY - node.baseY) ** 2
-          )
-          const currentDistance = Math.sqrt(
-            (connectedNode.x - node.x) ** 2 +
-            (connectedNode.y - node.y) ** 2
-          )
-          
-          // 颜色变化反映变形程度
-          const distanceRatio = currentDistance / baseDistance
-          let color
-          
-          if (distanceRatio > 1.1) {
-            // 拉伸状态 - 使用第三色（紫色）
-            const alpha = Math.min(0.8, (distanceRatio - 1.1) * 2)
-            color = colors.tertiary.replace('0.6', alpha.toString())
-          } else if (distanceRatio < 0.9) {
-            // 压缩状态 - 使用辅色（橙色）
-            const alpha = Math.min(0.8, (0.9 - distanceRatio) * 2)
-            color = colors.secondary.replace('0.7', alpha.toString())
-          } else {
-            // 正常状态 - 使用主色（青色）
-            color = colors.primary
-          }
-          
-          ctx.strokeStyle = color
-          
-          // 绘制连接线
-          ctx.beginPath()
-          ctx.moveTo(node.x, node.y)
-          ctx.lineTo(connectedNode.x, connectedNode.y)
-          ctx.stroke()
-        }
-      }
+      // 计算线条透明度 (根据拉伸程度)
+      const dx = nodeB.x - nodeA.x
+      const dy = nodeB.y - nodeA.y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      const strain = Math.abs(distance - spring.length) / spring.length
+      const alpha = Math.max(0.1, Math.min(0.8, 1 - strain * 3))
+      
+      // 设置线条样式
+      ctx.beginPath()
+      ctx.strokeStyle = isDark 
+        ? `rgba(0, 247, 255, ${alpha})`
+        : `rgba(0, 120, 255, ${alpha})`
+      
+      ctx.moveTo(nodeA.x, nodeA.y)
+      ctx.lineTo(nodeB.x, nodeB.y)
+      ctx.stroke()
     }
     
     // 绘制节点
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i]
+    for (let i = 0; i < grid.nodes.length; i++) {
+      const node = grid.nodes[i]
       
-      // 控制点或拖拽点使用更明显的样式
-      if (node.isControlPoint || (mouseRef.current.dragging && mouseRef.current.dragging.index === i)) {
-        ctx.fillStyle = isDark ? colors.secondary : 'rgba(255, 107, 53, 0.9)'
-        ctx.beginPath()
-        ctx.arc(node.x, node.y, 4, 0, Math.PI * 2)
-        ctx.fill()
-      } else if (!node.isFixed) {
-        // 普通节点
-        ctx.fillStyle = isDark ? 'rgba(0, 247, 255, 0.5)' : 'rgba(0, 100, 255, 0.3)'
-        ctx.beginPath()
-        ctx.arc(node.x, node.y, 2, 0, Math.PI * 2)
-        ctx.fill()
-      }
+      ctx.beginPath()
+      const size = node.pinned ? 3 : 2
+      ctx.fillStyle = colors.nodeColor
+      ctx.arc(node.x, node.y, size, 0, Math.PI * 2)
+      ctx.fill()
     }
   }
   
-  // 查找最近的节点
-  const findClosestNode = (x: number, y: number) => {
-    const nodes = gridRef.current.nodes
-    let closestIdx = -1
-    let closestDist = Infinity
-    
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i]
+  // 绘制波纹
+  const drawRipples = (ctx: CanvasRenderingContext2D) => {
+    for (const ripple of ripplesRef.current) {
+      ctx.beginPath()
       
-      if (node.isFixed) continue // 忽略固定节点
+      // 创建径向渐变
+      const gradient = ctx.createRadialGradient(
+        ripple.x, ripple.y, ripple.radius - 10,
+        ripple.x, ripple.y, ripple.radius
+      )
       
-      const dx = node.x - x
-      const dy = node.y - y
-      const dist = dx * dx + dy * dy
+      gradient.addColorStop(0, `rgba(255, 107, 53, 0)`)
+      gradient.addColorStop(0.5, colors.rippleColor.replace(')', `, ${ripple.life * 0.5})`))
+      gradient.addColorStop(1, `rgba(255, 107, 53, 0)`)
       
-      if (dist < closestDist) {
-        closestDist = dist
-        closestIdx = i
-      }
+      ctx.strokeStyle = gradient
+      ctx.lineWidth = 2
+      ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2)
+      ctx.stroke()
     }
-    
-    // 只有在足够近的情况下才返回节点
-    return closestDist < 400 ? closestIdx : -1
   }
   
   // 动画循环
   const animate = (timestamp: number) => {
     const canvas = canvasRef.current
-    const ctx = contextRef.current
+    if (!canvas) return
     
-    if (!canvas || !ctx) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
     
     // 计算时间增量
-    const deltaTime = timestamp - (timeRef.current || timestamp)
-    timeRef.current = timestamp
+    const deltaTime = Math.min(30, timestamp - (timestamp || 0))
     
     // 清空画布
-    const isDark = theme === 'dark'
-    ctx.fillStyle = isDark ? colors.darkBg : colors.lightBg
+    ctx.fillStyle = theme === 'dark' ? colors.darkBg : colors.lightBg
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     
-    // 更新流体网格
-    updateFluidGrid(deltaTime)
+    // 更新物理
+    updateGridPhysics(deltaTime)
     
-    // 绘制流体网格
-    drawFluidGrid(ctx)
+    // 绘制网格
+    drawGrid(ctx, canvas.width, canvas.height)
+    
+    // 绘制波纹
+    drawRipples(ctx)
     
     // 继续动画循环
     requestRef.current = requestAnimationFrame(animate)
+  }
+  
+  // 寻找最近的节点
+  const findClosestNode = (x: number, y: number) => {
+    const grid = gridRef.current
+    let closestNode = null
+    let closestDistance = Infinity
+    
+    for (let i = 0; i < grid.nodes.length; i++) {
+      const node = grid.nodes[i]
+      const dx = node.x - x
+      const dy = node.y - y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      
+      if (distance < closestDistance) {
+        closestDistance = distance
+        closestNode = i
+      }
+    }
+    
+    return { index: closestNode, distance: closestDistance }
   }
   
   // 监听窗口大小变化
@@ -439,67 +385,80 @@ export default function DataFlowBackground() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
   
-  // 鼠标事件处理
+  // 监听鼠标交互
   useEffect(() => {
-    if (typeof window === 'undefined' || !canvasRef.current) return
+    if (typeof window === 'undefined') return
     
     const canvas = canvasRef.current
+    if (!canvas) return
     
-    const handleMouseMove = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
-      
-      mouseRef.current.position = { x, y }
-    }
-    
+    // 鼠标按下处理
     const handleMouseDown = (e: MouseEvent) => {
-      if (!mouseRef.current.position) return
-      
-      mouseRef.current.isDown = true
-      
-      // 查找最近的节点进行拖拽
       const rect = canvas.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
       
-      const nodeIndex = findClosestNode(x, y)
+      // 寻找最近的节点
+      const { index, distance } = findClosestNode(x, y)
       
-      if (nodeIndex >= 0) {
-        const node = gridRef.current.nodes[nodeIndex]
-        mouseRef.current.dragging = {
-          index: nodeIndex,
-          offsetX: x - node.x,
-          offsetY: y - node.y
-        }
+      if (distance < 30) {
+        // 开始拖拽
+        isDraggingRef.current = true
+        dragNodeRef.current = index
+        // 不固定拖拽节点
+        gridRef.current.nodes[index].pinned = false
+      } else {
+        // 产生波纹
+        createRipple(x, y, 10)
       }
     }
     
+    // 鼠标移动处理
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDraggingRef.current && dragNodeRef.current !== null) {
+        const rect = canvas.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        
+        // 更新拖拽节点位置
+        const node = gridRef.current.nodes[dragNodeRef.current]
+        
+        // 强制设置位置
+        node.x = x
+        node.y = y
+        node.oldX = x
+        node.oldY = y
+      }
+    }
+    
+    // 鼠标释放处理
     const handleMouseUp = () => {
-      mouseRef.current.isDown = false
-      mouseRef.current.dragging = null
+      if (isDraggingRef.current && dragNodeRef.current !== null) {
+        const node = gridRef.current.nodes[dragNodeRef.current]
+        
+        // 添加波纹效果
+        createRipple(node.x, node.y, 5)
+        
+        // 停止拖拽
+        isDraggingRef.current = false
+        dragNodeRef.current = null
+      }
     }
     
-    const handleMouseLeave = () => {
-      mouseRef.current.position = null
-      mouseRef.current.isDown = false
-      mouseRef.current.dragging = null
-    }
-    
-    canvas.addEventListener('mousemove', handleMouseMove)
+    // 添加事件监听
     canvas.addEventListener('mousedown', handleMouseDown)
+    window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
-    canvas.addEventListener('mouseleave', handleMouseLeave)
     
+    // 清理事件监听
     return () => {
-      canvas.removeEventListener('mousemove', handleMouseMove)
       canvas.removeEventListener('mousedown', handleMouseDown)
+      window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
-      canvas.removeEventListener('mouseleave', handleMouseLeave)
     }
   }, [])
   
-  // 初始化和动画启动
+  // 初始化和启动动画
   useEffect(() => {
     if (typeof window === 'undefined') return
     
@@ -510,16 +469,11 @@ export default function DataFlowBackground() {
     canvas.width = dimensions.width
     canvas.height = dimensions.height
     
-    // 获取上下文
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    // 初始化网格
+    gridRef.current = initGrid(dimensions.width, dimensions.height)
     
-    contextRef.current = ctx
-    
-    // 创建流体网格
-    const gridResolution = Math.max(15, Math.min(24, dimensions.width / 60))
-    gridRef.current.resolution = gridResolution
-    gridRef.current.nodes = createFluidGrid(dimensions.width, dimensions.height, gridResolution)
+    // 初始化波纹数组
+    ripplesRef.current = []
     
     // 开始动画循环
     requestRef.current = requestAnimationFrame(animate)
@@ -532,6 +486,8 @@ export default function DataFlowBackground() {
     }
   }, [dimensions, theme])
 
+  if (typeof window === 'undefined') return null
+
   return (
     <canvas
       ref={canvasRef}
@@ -543,7 +499,6 @@ export default function DataFlowBackground() {
         height: '100%',
         pointerEvents: 'none',
         zIndex: -1,
-        cursor: mouseRef.current?.dragging ? 'grabbing' : 'default'
       }}
     />
   )
