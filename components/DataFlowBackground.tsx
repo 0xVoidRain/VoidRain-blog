@@ -15,11 +15,14 @@ interface GridNode {
   phase: number
 }
 
-interface LightBurst {
+// 修改为雨滴接口
+interface RainDrop {
   x: number
   y: number
-  size: number
-  maxSize: number
+  length: number      // 雨滴长度
+  width: number       // 雨滴宽度
+  speed: number       // 下落速度
+  angle: number       // 下落角度
   opacity: number
   life: number
   maxLife: number
@@ -36,10 +39,10 @@ export default function DataFlowBackground() {
   })
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null)
   
-  // 动画状态引用
+  // 动画状态引用 - 将burstsRef改为rainDropsRef
   const nodesRef = useRef<GridNode[]>([])
   const linesRef = useRef<any[]>([])
-  const burstsRef = useRef<LightBurst[]>([])
+  const rainDropsRef = useRef<RainDrop[]>([])
   const timeRef = useRef(0)
   const rotationRef = useRef(0)
   const glitchTimeRef = useRef(0)
@@ -147,23 +150,113 @@ export default function DataFlowBackground() {
     return lines
   }
   
-  // 添加光爆
-  const addLightBurst = (x: number, y: number) => {
-    const burst: LightBurst = {
+  // 新增：添加雨滴
+  const addRainDrop = (x: number, y: number) => {
+    const colorRatio = Math.random()
+    const color = getGradientColor(colorRatio)
+    const maxLife = Math.random() * 100 + 100
+    
+    rainDropsRef.current.push({
       x,
       y,
-      size: 0,
-      maxSize: Math.random() * 40 + 20,
-      opacity: 1,
+      length: Math.random() * 15 + 10,  // 雨滴长度
+      width: Math.random() * 3 + 1,     // 雨滴宽度
+      speed: Math.random() * 3 + 1,     // 下落速度
+      angle: Math.PI / 2 + (Math.random() - 0.5) * 0.3, // 基本垂直，略有偏移
+      opacity: Math.random() * 0.5 + 0.5,
       life: 0,
-      maxLife: Math.random() * 1 + 0.5,
-      color: getGradientColor(Math.random())
-    }
+      maxLife,
+      color
+    })
     
-    burstsRef.current.push(burst)
+    // 随机生成新雨滴
+    if (Math.random() < 0.3 && rainDropsRef.current.length < 100) {
+      const offsetX = (Math.random() - 0.5) * 150
+      const offsetY = (Math.random() - 0.5) * 150
+      setTimeout(() => {
+        addRainDrop(x + offsetX, y + offsetY)
+      }, Math.random() * 300)
+    }
   }
   
-  // 动画循环
+  // 更新雨滴
+  const updateRainDrops = (deltaTime: number) => {
+    rainDropsRef.current.forEach((drop, i) => {
+      // 更新生命周期
+      drop.life += deltaTime
+      
+      // 根据角度更新位置
+      drop.y += Math.cos(drop.angle) * drop.speed * deltaTime
+      drop.x += Math.sin(drop.angle) * drop.speed * deltaTime
+      
+      // 临近生命周期结束时降低透明度
+      if (drop.life > drop.maxLife * 0.7) {
+        drop.opacity = Math.max(0, drop.opacity - 0.01 * deltaTime)
+      }
+    })
+    
+    // 移除死亡的雨滴
+    rainDropsRef.current = rainDropsRef.current.filter(drop => drop.life < drop.maxLife)
+    
+    // 随机添加新雨滴
+    if (Math.random() < 0.05 && rainDropsRef.current.length < 50) {
+      const x = Math.random() * dimensions.width
+      const y = Math.random() * dimensions.height * 0.3 // 主要在上方生成
+      addRainDrop(x, y)
+    }
+  }
+  
+  // 绘制雨滴
+  const drawRainDrops = (ctx: CanvasRenderingContext2D) => {
+    rainDropsRef.current.forEach(drop => {
+      const lifeRatio = drop.life / drop.maxLife
+      
+      // 保存当前状态
+      ctx.save()
+      
+      // 移动到雨滴位置
+      ctx.translate(drop.x, drop.y)
+      ctx.rotate(drop.angle) // 旋转到下落角度
+      
+      // 设置绘制样式
+      ctx.globalAlpha = drop.opacity * (1 - lifeRatio)
+      
+      // 创建雨滴渐变
+      const gradient = ctx.createLinearGradient(0, -drop.length/2, 0, drop.length/2)
+      gradient.addColorStop(0, `${drop.color}00`) // 透明顶部
+      gradient.addColorStop(0.2, drop.color)      // 实色中部
+      gradient.addColorStop(1, `${drop.color}80`) // 半透明尾部
+      
+      ctx.fillStyle = gradient
+      ctx.shadowColor = drop.color
+      ctx.shadowBlur = 5
+      
+      // 绘制雨滴形状 - 使用贝塞尔曲线创建水滴形状
+      ctx.beginPath()
+      
+      // 顶部圆弧
+      ctx.arc(0, -drop.length/2, drop.width/2, 0, Math.PI, true)
+      
+      // 右侧曲线
+      ctx.bezierCurveTo(
+        drop.width/2, -drop.length/4,
+        drop.width/2, drop.length/3,
+        0, drop.length/2
+      )
+      
+      // 左侧曲线
+      ctx.bezierCurveTo(
+        -drop.width/2, drop.length/3,
+        -drop.width/2, -drop.length/4,
+        0, -drop.length/2
+      )
+      
+      ctx.fill()
+      ctx.restore()
+    })
+  }
+  
+  // 修改动画循环以包含雨滴更新和绘制
   const animate = (time: number) => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -171,36 +264,41 @@ export default function DataFlowBackground() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     
-    // 更新时间
-    const deltaTime = Math.min((time - timeRef.current) / 1000, 0.1) // 限制最大帧时间
+    // 计算时间增量
+    const deltaTime = Math.min(30, time - (timeRef.current || time))
     timeRef.current = time
     
     // 更新旋转角度
-    rotationRef.update = (rotationRef.current + deltaTime * 0.05) % (Math.PI * 2)
+    rotationRef.current = (rotationRef.current + deltaTime * 0.05) % (Math.PI * 2)
     
     // 故障效果计时
     glitchTimeRef.current += deltaTime
-    if (glitchTimeRef.current > 5 && !glitchActiveRef.current && Math.random() < 0.3) {
+    
+    // 每隔一段时间触发故障效果
+    if (glitchTimeRef.current > 3000 && Math.random() < 0.01) {
       glitchActiveRef.current = true
       setTimeout(() => {
         glitchActiveRef.current = false
-        glitchTimeRef.current = 0
-      }, Math.random() * 300 + 100)
+      }, 200)
+      glitchTimeRef.current = 0
     }
     
     // 清空画布
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     
-    // 绘制扭曲网格
-    drawDistortedGrid(ctx, deltaTime)
+    // 更新和绘制网格节点
+    updateNodes(deltaTime)
+    drawGrid(ctx)
     
-    // 绘制流线
-    drawFlowLines(ctx, deltaTime)
+    // 更新和绘制流线
+    updateFlowLines(deltaTime)
+    drawFlowLines(ctx)
     
-    // 绘制光爆
-    drawLightBursts(ctx, deltaTime)
+    // 更新和绘制雨滴
+    updateRainDrops(deltaTime)
+    drawRainDrops(ctx)
     
-    // 应用故障艺术效果
+    // 应用故障效果
     if (glitchActiveRef.current) {
       applyGlitchEffect(ctx, canvas.width, canvas.height)
     }
@@ -255,7 +353,7 @@ export default function DataFlowBackground() {
           
           // 随机触发光爆粒子
           if (Math.random() < influenceFactor * 0.02) {
-            addLightBurst(node.x, node.y)
+            addRainDrop(node.x, node.y)
           }
         } else {
           node.active = false
@@ -268,7 +366,7 @@ export default function DataFlowBackground() {
       
       // 随机触发光爆
       if (Math.random() < 0.0002) {
-        addLightBurst(node.x, node.y)
+        addRainDrop(node.x, node.y)
       }
     })
     
@@ -450,44 +548,6 @@ export default function DataFlowBackground() {
     })
   }
   
-  // 绘制光爆
-  const drawLightBursts = (ctx: CanvasRenderingContext2D, deltaTime: number) => {
-    const bursts = burstsRef.current
-    
-    // 更新和绘制每个光爆
-    for (let i = bursts.length - 1; i >= 0; i--) {
-      const burst = bursts[i]
-      
-      // 更新生命周期
-      burst.life += deltaTime
-      
-      if (burst.life >= burst.maxLife) {
-        // 移除过期光爆
-        bursts.splice(i, 1)
-        continue
-      }
-      
-      // 计算当前大小和不透明度
-      const lifeRatio = burst.life / burst.maxLife
-      burst.size = burst.maxSize * Math.sin(lifeRatio * Math.PI)
-      burst.opacity = 1 - lifeRatio
-      
-      // 绘制光爆
-      ctx.globalAlpha = burst.opacity
-      ctx.fillStyle = burst.color
-      ctx.shadowBlur = burst.size
-      ctx.shadowColor = burst.color
-      
-      ctx.beginPath()
-      ctx.arc(burst.x, burst.y, burst.size, 0, Math.PI * 2)
-      ctx.fill()
-      
-      ctx.shadowBlur = 0
-    }
-    
-    ctx.globalAlpha = 1
-  }
-  
   // 应用故障艺术效果
   const applyGlitchEffect = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
     const imageData = ctx.getImageData(0, 0, width, height)
@@ -558,12 +618,17 @@ export default function DataFlowBackground() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
   
-  // 鼠标处理
+  // 鼠标处理 - 修改为添加雨滴
   useEffect(() => {
     if (typeof window === 'undefined') return
     
     const handleMouseMove = (e: MouseEvent) => {
       setMousePosition({ x: e.clientX, y: e.clientY })
+      
+      // 移动鼠标时偶尔添加雨滴
+      if (Math.random() < 0.1) {
+        addRainDrop(e.clientX, e.clientY)
+      }
     }
     
     const handleMouseLeave = () => {
@@ -571,11 +636,11 @@ export default function DataFlowBackground() {
     }
     
     const handleClick = (e: MouseEvent) => {
-      // 点击时创建多个光爆
-      for (let i = 0; i < 5; i++) {
-        const offsetX = (Math.random() - 0.5) * 40
-        const offsetY = (Math.random() - 0.5) * 40
-        addLightBurst(e.clientX + offsetX, e.clientY + offsetY)
+      // 点击时创建多个雨滴
+      for (let i = 0; i < 8; i++) {
+        const offsetX = (Math.random() - 0.5) * 60
+        const offsetY = (Math.random() - 0.5) * 60
+        addRainDrop(e.clientX + offsetX, e.clientY + offsetY)
       }
     }
     
@@ -590,7 +655,7 @@ export default function DataFlowBackground() {
     }
   }, [])
   
-  // 初始化和动画处理
+  // 初始化和动画处理 - 更新为雨滴初始化
   useEffect(() => {
     if (typeof window === 'undefined') return
     
@@ -601,10 +666,18 @@ export default function DataFlowBackground() {
     canvas.width = dimensions.width
     canvas.height = dimensions.height
     
-    // 初始化网格和流线
+    // 初始化网格、流线和雨滴
     nodesRef.current = initGrid(dimensions.width, dimensions.height)
     linesRef.current = initFlowLines(dimensions.width, dimensions.height)
-    burstsRef.current = []
+    rainDropsRef.current = []
+    
+    // 初始化一些雨滴
+    for (let i = 0; i < 20; i++) {
+      addRainDrop(
+        Math.random() * dimensions.width,
+        Math.random() * dimensions.height * 0.7
+      )
+    }
     
     // 开始动画循环
     requestRef.current = requestAnimationFrame(animate)
