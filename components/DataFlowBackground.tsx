@@ -3,491 +3,712 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
 
+// 定义流线
+interface FlowLine {
+  points: { x: number; y: number; age: number }[]
+  width: number
+  color: string
+  speed: number
+  maxPoints: number
+  opacity: number
+  energy: number
+  active: boolean
+}
+
+// 定义能量网格节点
+interface GridNode {
+  x: number
+  y: number
+  baseX: number
+  baseY: number
+  size: number
+  baseSize: number
+  energy: number
+  connections: number[]
+  phase: number
+  speed: number
+  active: boolean
+  color: string
+  pulseTime: number
+}
+
+// 定义光粒子
+interface LightParticle {
+  x: number
+  y: number
+  size: number
+  speed: number
+  angle: number
+  color: string
+  opacity: number
+  life: number
+  maxLife: number
+}
+
+// 主组件
 export default function DataFlowBackground() {
   const { theme } = useTheme()
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const gridNodesRef = useRef<GridNode[]>([])
+  const flowLinesRef = useRef<FlowLine[]>([])
+  const particlesRef = useRef<LightParticle[]>([])
+  const energyLevelRef = useRef(1)
+  const timeRef = useRef(0)
   const requestRef = useRef<number>()
-  const scrollYRef = useRef(0)
-  const lastScrollYRef = useRef(0)
-  const glitchIntensityRef = useRef(0)
-  
+  const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null)
   const [dimensions, setDimensions] = useState({
     width: typeof window !== 'undefined' ? window.innerWidth : 1200,
     height: typeof window !== 'undefined' ? window.innerHeight : 800
   })
-  
-  // 网格参数
-  const gridRef = useRef({
-    cells: [],
-    size: 40,
-    noiseScale: 0.04,
-    glitchAreas: [],
-    snowAreas: []
-  })
-  
-  // 时间与噪音控制
-  const timeRef = useRef(0)
-  const noiseOffsetRef = useRef({
-    x: Math.random() * 1000,
-    y: Math.random() * 1000
-  })
-  
-  // 颜色配置
-  const colors = {
-    primaryDark: '#00f0ff',      // 青色
-    secondaryDark: '#ff00ff',    // 品红
-    primaryLight: '#0080ff',     // 蓝色
-    secondaryLight: '#ff2070',   // 暗粉
-    glitchRed: '#ff2b4a',
-    glitchGreen: '#00ff9f',
-    glitchBlue: '#0080ff'
+
+  // 获取当前主题颜色
+  const getThemeColors = () => {
+    const isDark = theme === 'dark'
+    return {
+      background: isDark ? '#090b10' : '#f8fafc',
+      gridLines: isDark 
+        ? ['rgba(0, 247, 255, 0.08)', 'rgba(32, 252, 143, 0.06)'] 
+        : ['rgba(0, 247, 255, 0.04)', 'rgba(32, 252, 143, 0.03)'],
+      gridNodes: isDark 
+        ? ['#00F7FF', '#20FC8F'] 
+        : ['#00c8cc', '#20cc72'],
+      gridConnection: isDark 
+        ? 'rgba(0, 247, 255, 0.15)' 
+        : 'rgba(0, 247, 255, 0.08)',
+      flowLines: isDark 
+        ? ['#00F7FF', '#20FC8F', '#FF00FF', '#FF6B35'] 
+        : ['#00c8cc', '#20cc72', '#cc00cc', '#cc5429'],
+      particles: isDark 
+        ? ['#00F7FF', '#FF00FF'] 
+        : ['#00d8e6', '#e600e6']
+    }
   }
-  
-  // 创建网格
-  const createGrid = (width: number, height: number) => {
-    const gridSize = Math.max(25, Math.min(40, width / 30))
-    const cols = Math.ceil(width / gridSize) + 1
-    const rows = Math.ceil(height / gridSize) + 1
+
+  // 初始化网格节点
+  const initGridNodes = (width: number, height: number) => {
+    const nodes: GridNode[] = []
+    const colors = getThemeColors().gridNodes
     
-    const cells = []
+    // 计算网格尺寸
+    const gridSpacing = 100
+    const columns = Math.ceil(width / gridSpacing) + 2
+    const rows = Math.ceil(height / gridSpacing) + 2
     
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < cols; x++) {
-        cells.push({
-          x: x * gridSize,
-          y: y * gridSize,
-          baseX: x * gridSize,
-          baseY: y * gridSize,
-          broken: Math.random() < 0.1,                   // 10% 的单元格有断裂效果
-          offset: Math.random() * 5,                     // 随机位移量
-          offsetDirection: Math.random() * Math.PI * 2,  // 随机方向
-          phase: Math.random() * Math.PI * 2,            // 随机相位
-          speed: 0.2 + Math.random() * 0.3,              // 随机速度
-          glitchStrength: 0,                             // 故障强度
-          pixelSize: 1 + Math.random() * 3               // 像素块大小
+    // 创建网格节点
+    for (let y = -1; y < rows; y++) {
+      for (let x = -1; x < columns; x++) {
+        const baseX = x * gridSpacing
+        const baseY = y * gridSpacing
+        
+        nodes.push({
+          x: baseX,
+          y: baseY,
+          baseX,
+          baseY,
+          size: 2 + Math.random() * 3,
+          baseSize: 2 + Math.random() * 3,
+          energy: 0.2 + Math.random() * 0.3,
+          connections: [],
+          phase: Math.random() * Math.PI * 2,
+          speed: 0.005 + Math.random() * 0.005,
+          active: Math.random() < 0.1,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          pulseTime: 0
         })
       }
     }
     
-    // 创建故障区域
-    const glitchAreas = []
-    const snowAreas = []
-    
-    // 添加3-5个故障区域
-    for (let i = 0; i < 3 + Math.floor(Math.random() * 3); i++) {
-      glitchAreas.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        radius: 50 + Math.random() * 150,
-        intensity: 0.5 + Math.random() * 0.5,
-        speed: 0.001 + Math.random() * 0.003,
-        phase: Math.random() * Math.PI * 2
-      })
-    }
-    
-    // 添加2-4个雪花噪点区域
-    for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) {
-      snowAreas.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        width: 100 + Math.random() * 200,
-        height: 100 + Math.random() * 200,
-        intensity: 0.3 + Math.random() * 0.7,
-        speed: 0.01 + Math.random() * 0.02
-      })
-    }
-    
-    return {
-      cells,
-      size: gridSize,
-      noiseScale: 0.04,
-      glitchAreas,
-      snowAreas
-    }
-  }
-  
-  // 简化的噪声函数
-  const noise = (x: number, y: number) => {
-    return Math.sin(x * 0.1) * Math.cos(y * 0.1) * 
-           Math.sin((x + y) * 0.05) +
-           Math.cos(x * 0.06) * Math.sin(y * 0.12)
-  }
-  
-  // 应用故障效果
-  const applyGlitchEffect = (cell: any, time: number, scrollIntensity: number) => {
-    // 基础位移
-    const noiseValue = noise(
-      cell.x * gridRef.current.noiseScale + timeRef.current * cell.speed,
-      cell.y * gridRef.current.noiseScale + timeRef.current * cell.speed
-    )
-    
-    const baseDisplacement = 2 + noiseValue * 3  // 基础位移量
-    
-    // 计算在故障区域中的影响
-    let glitchMultiplier = 0
-    gridRef.current.glitchAreas.forEach(area => {
-      const dx = cell.x - area.x
-      const dy = cell.y - area.y
-      const distance = Math.sqrt(dx * dx + dy * dy)
-      
-      if (distance < area.radius) {
-        const influence = 1 - distance / area.radius
-        // 随时间变化的故障强度
-        const timeInfluence = Math.sin(time * area.speed + area.phase) * 0.5 + 0.5
-        glitchMultiplier += influence * area.intensity * timeInfluence
-      }
-    })
-    
-    // 加入滚动带来的额外故障因子
-    glitchMultiplier += scrollIntensity * 2
-    
-    // 限制最大影响
-    glitchMultiplier = Math.min(1, glitchMultiplier)
-    
-    // 最终位移计算
-    const glitchDisplacement = baseDisplacement * glitchMultiplier * 5
-    
-    // 随机的断裂方向
-    const glitchAngle = noise(
-      cell.x * 0.01 + time * 0.1, 
-      cell.y * 0.01 + time * 0.1
-    ) * Math.PI * 2
-    
-    // 应用到单元格
-    cell.glitchStrength = glitchMultiplier
-    
-    return {
-      x: cell.x + Math.cos(glitchAngle) * glitchDisplacement * (cell.broken ? 3 : 1),
-      y: cell.y + Math.sin(glitchAngle) * glitchDisplacement * (cell.broken ? 3 : 1)
-    }
-  }
-  
-  // 绘制网格
-  const drawGrid = (ctx: CanvasRenderingContext2D, time: number, width: number, height: number, scrollIntensity: number) => {
-    const isDark = theme === 'dark'
-    const grid = gridRef.current
-    const cells = grid.cells
-    
-    // 绘制网格线
-    for (let i = 0; i < cells.length; i++) {
-      const cell = cells[i]
-      
-      // 应用故障效果
-      const glitched = applyGlitchEffect(cell, time, scrollIntensity)
-      
-      // 绘制水平线
-      if (i % 2 === 0 && cell.y < height && cell.x < width) {
-        const nextCellX = cells[i + 1]
-        if (nextCellX && nextCellX.y === cell.y) {
-          const nextGlitched = applyGlitchEffect(nextCellX, time, scrollIntensity)
+    // 建立节点连接
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = 0; j < nodes.length; j++) {
+        if (i !== j) {
+          const dx = nodes[i].baseX - nodes[j].baseX
+          const dy = nodes[i].baseY - nodes[j].baseY
+          const dist = Math.sqrt(dx * dx + dy * dy)
           
-          // 绘制正常线
-          ctx.beginPath()
-          ctx.moveTo(glitched.x, glitched.y)
-          
-          // 如果是断裂的，画成像素块
-          if (cell.broken || nextCellX.broken || cell.glitchStrength > 0.7 || Math.random() < scrollIntensity * 0.3) {
-            // 像素化线条
-            const lineLength = nextGlitched.x - glitched.x
-            const pixelSize = cell.pixelSize * (1 + cell.glitchStrength * 3)
-            const pixelCount = Math.floor(lineLength / pixelSize)
-            
-            for (let p = 0; p < pixelCount; p++) {
-              // 只画一部分像素，制造断裂效果
-              if (Math.random() > 0.3) {
-                const pixelX = glitched.x + p * pixelSize
-                const pixelY = glitched.y + (Math.random() - 0.5) * cell.glitchStrength * 10
-                
-                // 控制一些像素块的颜色偏移，形成RGB分离效果
-                if (cell.glitchStrength > 0.5 && Math.random() < 0.3) {
-                  const offsetX = (Math.random() - 0.5) * cell.glitchStrength * 10
-                  const offsetY = (Math.random() - 0.5) * cell.glitchStrength * 6
-                  
-                  ctx.fillStyle = Math.random() < 0.33 
-                    ? colors.glitchRed
-                    : Math.random() < 0.5 
-                      ? colors.glitchGreen 
-                      : colors.glitchBlue
-                  
-                  ctx.fillRect(
-                    pixelX + offsetX, 
-                    pixelY + offsetY, 
-                    pixelSize * (0.8 + Math.random() * 0.4), 
-                    pixelSize * (0.8 + Math.random() * 0.4)
-                  )
-                } else {
-                  // 普通像素
-                  ctx.fillStyle = getGradientColor(cell.glitchStrength, isDark)
-                  ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize)
-                }
-              }
-            }
-          } else {
-            // 正常线条，带有渐变效果
-            const gradient = ctx.createLinearGradient(glitched.x, glitched.y, nextGlitched.x, nextGlitched.y)
-            gradient.addColorStop(0, getGradientColor(0, isDark))
-            gradient.addColorStop(1, getGradientColor(nextCellX.glitchStrength, isDark))
-            
-            ctx.strokeStyle = gradient
-            ctx.lineWidth = 1 + cell.glitchStrength * 2
-            ctx.lineTo(nextGlitched.x, nextGlitched.y)
-            ctx.stroke()
-          }
-        }
-      }
-      
-      // 绘制垂直线
-      if (cell.x < width && cell.y < height) {
-        const cellBelow = cells.find(c => 
-          c.baseX === cell.baseX && 
-          c.baseY === cell.baseY + grid.size
-        )
-        
-        if (cellBelow) {
-          const belowGlitched = applyGlitchEffect(cellBelow, time, scrollIntensity)
-          
-          // 绘制正常线
-          ctx.beginPath()
-          ctx.moveTo(glitched.x, glitched.y)
-          
-          // 如果是断裂的，画成像素块
-          if (cell.broken || cellBelow.broken || cell.glitchStrength > 0.7 || Math.random() < scrollIntensity * 0.3) {
-            // 像素化线条
-            const lineLength = belowGlitched.y - glitched.y
-            const pixelSize = cell.pixelSize * (1 + cell.glitchStrength * 3)
-            const pixelCount = Math.floor(lineLength / pixelSize)
-            
-            for (let p = 0; p < pixelCount; p++) {
-              // 只画一部分像素，制造断裂效果
-              if (Math.random() > 0.3) {
-                const pixelY = glitched.y + p * pixelSize
-                const pixelX = glitched.x + (Math.random() - 0.5) * cell.glitchStrength * 10
-                
-                // RGB分离效果
-                if (cell.glitchStrength > 0.5 && Math.random() < 0.3) {
-                  const offsetX = (Math.random() - 0.5) * cell.glitchStrength * 10
-                  const offsetY = (Math.random() - 0.5) * cell.glitchStrength * 6
-                  
-                  ctx.fillStyle = Math.random() < 0.33 
-                    ? colors.glitchRed
-                    : Math.random() < 0.5 
-                      ? colors.glitchGreen 
-                      : colors.glitchBlue
-                  
-                  ctx.fillRect(
-                    pixelX + offsetX, 
-                    pixelY + offsetY, 
-                    pixelSize * (0.8 + Math.random() * 0.4), 
-                    pixelSize * (0.8 + Math.random() * 0.4)
-                  )
-                } else {
-                  // 普通像素
-                  ctx.fillStyle = getGradientColor(cell.glitchStrength, isDark)
-                  ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize)
-                }
-              }
-            }
-          } else {
-            // 正常线条，带有渐变效果
-            const gradient = ctx.createLinearGradient(glitched.x, glitched.y, belowGlitched.x, belowGlitched.y)
-            gradient.addColorStop(0, getGradientColor(0, isDark))
-            gradient.addColorStop(1, getGradientColor(cellBelow.glitchStrength, isDark))
-            
-            ctx.strokeStyle = gradient
-            ctx.lineWidth = 1 + cell.glitchStrength * 2
-            ctx.lineTo(belowGlitched.x, belowGlitched.y)
-            ctx.stroke()
+          // 如果节点距离在合适范围内，建立连接
+          if (dist < gridSpacing * 1.5) {
+            nodes[i].connections.push(j)
           }
         }
       }
     }
+    
+    return nodes
   }
-  
-  // 获取渐变色
-  const getGradientColor = (glitchStrength: number, isDark: boolean) => {
-    const primary = isDark ? colors.primaryDark : colors.primaryLight
-    const secondary = isDark ? colors.secondaryDark : colors.secondaryLight
-    
-    if (glitchStrength > 0.7) {
-      // 强故障时使用更明亮的颜色
-      return Math.random() < 0.5 ? colors.glitchGreen : colors.glitchBlue
-    }
-    
-    // 混合颜色
-    const mix = Math.sin(timeRef.current * 0.001) * 0.5 + 0.5
-    return glitchStrength < 0.2 
-      ? primary 
-      : lerpColor(primary, secondary, mix * glitchStrength)
-  }
-  
-  // 颜色插值
-  const lerpColor = (color1: string, color2: string, amount: number) => {
-    const r1 = parseInt(color1.substring(1, 3), 16)
-    const g1 = parseInt(color1.substring(3, 5), 16)
-    const b1 = parseInt(color1.substring(5, 7), 16)
-    
-    const r2 = parseInt(color2.substring(1, 3), 16)
-    const g2 = parseInt(color2.substring(3, 5), 16)
-    const b2 = parseInt(color2.substring(5, 7), 16)
-    
-    const r = Math.floor(r1 + (r2 - r1) * amount)
-    const g = Math.floor(g1 + (g2 - g1) * amount)
-    const b = Math.floor(b1 + (b2 - b1) * amount)
-    
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
-  }
-  
-  // 绘制雪花噪点
-  const drawSnow = (ctx: CanvasRenderingContext2D, time: number, scrollIntensity: number) => {
-    const areas = gridRef.current.snowAreas
-    
-    areas.forEach(area => {
-      // 更新位置
-      area.x += Math.sin(time * 0.001) * 0.5
-      area.y += Math.cos(time * 0.001) * 0.5
-      
-      // 计算实际强度（考虑滚动影响）
-      const actualIntensity = Math.min(1, area.intensity + scrollIntensity * 0.5)
-      
-      // 绘制雪花噪点
-      ctx.save()
-      
-      // 模拟CSS clip-path效果
-      ctx.beginPath()
-      ctx.rect(area.x, area.y, area.width, area.height)
-      ctx.clip()
-      
-      // 随机雪花噪点
-      const pixelSize = 2 + scrollIntensity * 4
-      const pixelsX = Math.ceil(area.width / pixelSize)
-      const pixelsY = Math.ceil(area.height / pixelSize)
-      
-      for (let y = 0; y < pixelsY; y++) {
-        for (let x = 0; x < pixelsX; x++) {
-          // 根据噪声和时间决定是否绘制
-          if (Math.random() < actualIntensity * 0.3) {
-            const pixelX = area.x + x * pixelSize
-            const pixelY = area.y + y * pixelSize
-            
-            // 随机颜色
-            const brightness = 0.6 + Math.random() * 0.4
-            ctx.fillStyle = Math.random() < 0.1 
-              ? (Math.random() < 0.5 ? colors.glitchRed : colors.glitchBlue)
-              : `rgba(255, 255, 255, ${brightness * actualIntensity})`
-            
-            ctx.fillRect(
-              pixelX + (Math.random() - 0.5) * 4 * scrollIntensity, 
-              pixelY + (Math.random() - 0.5) * 4 * scrollIntensity, 
-              pixelSize * Math.random(), 
-              pixelSize * Math.random()
-            )
-          }
-        }
-      }
-      
-      // 绘制闪烁线
-      if (scrollIntensity > 0.2 || Math.random() < 0.05) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'
-        ctx.beginPath()
-        const lineY = area.y + Math.random() * area.height
-        ctx.moveTo(area.x, lineY)
-        ctx.lineTo(area.x + area.width, lineY)
-        ctx.lineWidth = 1 + Math.random() * 2
-        ctx.stroke()
-      }
-      
-      ctx.restore()
-    })
-  }
-  
-  // 绘制全局故障效果
-  const drawGlobalGlitch = (ctx: CanvasRenderingContext2D, width: number, height: number, intensity: number) => {
-    if (intensity <= 0) return
-    
-    // 绘制水平撕裂线
-    const lineCount = Math.floor(intensity * 5)
+
+  // 初始化流线
+  const initFlowLines = (width: number, height: number) => {
+    const lines: FlowLine[] = []
+    const colors = getThemeColors().flowLines
+    const lineCount = Math.max(5, Math.floor((width * height) / 100000))
     
     for (let i = 0; i < lineCount; i++) {
+      const x = Math.random() * width
       const y = Math.random() * height
-      const sliceHeight = 5 + Math.random() * 20
-      const offsetX = (Math.random() - 0.5) * 20 * intensity
       
-      // 复制并偏移图像区域
-      ctx.drawImage(
-        ctx.canvas,
-        0, y, width, sliceHeight,
-        offsetX, y, width, sliceHeight
-      )
-      
-      // 随机添加RGB通道错位
-      if (Math.random() < 0.3) {
-        ctx.fillStyle = `rgba(255, 0, 0, ${0.1 * intensity})`
-        ctx.fillRect(offsetX + 5, y, width, sliceHeight)
-        
-        ctx.fillStyle = `rgba(0, 255, 0, ${0.1 * intensity})`
-        ctx.fillRect(offsetX - 5, y, width, sliceHeight)
-        
-        ctx.fillStyle = `rgba(0, 0, 255, ${0.1 * intensity})`
-        ctx.fillRect(offsetX, y, width, sliceHeight)
-      }
+      lines.push({
+        points: [{ x, y, age: 0 }],
+        width: 1 + Math.random() * 2,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        speed: 1 + Math.random() * 3,
+        maxPoints: 15 + Math.floor(Math.random() * 15),
+        opacity: 0.4 + Math.random() * 0.4,
+        energy: 0.5 + Math.random() * 0.5,
+        active: true
+      })
     }
     
-    // 随机添加垂直扫描线
-    if (Math.random() < intensity * 0.7) {
-      const scanX = Math.random() * width
-      const scanWidth = 1 + Math.random() * 3
-      
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)'
-      ctx.fillRect(scanX, 0, scanWidth, height)
+    return lines
+  }
+
+  // 初始化光粒子
+  const initParticles = (width: number, height: number) => {
+    const particles: LightParticle[] = []
+    const colors = getThemeColors().particles
+    const particleCount = Math.max(10, Math.floor((width * height) / 50000))
+    
+    for (let i = 0; i < particleCount; i++) {
+      particles.push(createParticle(width, height, colors))
+    }
+    
+    return particles
+  }
+
+  // 创建单个光粒子
+  const createParticle = (width: number, height: number, colors: string[]) => {
+    return {
+      x: Math.random() * width,
+      y: Math.random() * height,
+      size: 1 + Math.random() * 3,
+      speed: 0.3 + Math.random() * 1.5,
+      angle: Math.random() * Math.PI * 2,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      opacity: 0.3 + Math.random() * 0.5,
+      life: 0,
+      maxLife: 100 + Math.random() * 200
     }
   }
-  
-  // 动画循环
-  const animate = (timestamp: number) => {
+
+  // 激活网格节点
+  const activateNode = (index: number, energy: number) => {
+    if (index >= 0 && index < gridNodesRef.current.length) {
+      const node = gridNodesRef.current[index]
+      node.active = true
+      node.energy = Math.min(node.energy + energy, 1)
+      node.pulseTime = 0
+      
+      // 向相邻节点传递能量
+      setTimeout(() => {
+        for (const connIndex of node.connections) {
+          if (Math.random() < 0.3) {
+            activateNode(connIndex, energy * 0.6)
+          }
+        }
+      }, 100 + Math.random() * 200)
+    }
+  }
+
+  // 计算网格扭曲
+  const getGridDistortion = (x: number, y: number, time: number) => {
+    const scale = 0.003
+    const timeScale = 0.0005
+    
+    // 使用多个正弦波叠加创建更自然的扭曲效果
+    const distortion1 = Math.sin(x * scale + time * timeScale) * Math.cos(y * scale + time * timeScale * 1.5) * 30
+    const distortion2 = Math.sin(x * scale * 1.5 + time * timeScale * 0.8) * Math.cos(y * scale * 0.8 - time * timeScale) * 20
+    
+    return {
+      x: distortion1 + distortion2 * 0.5,
+      y: distortion2 + distortion1 * 0.5
+    }
+  }
+
+  // 计算流场向量
+  const getFlowVector = (x: number, y: number, time: number) => {
+    const scale = 0.005
+    const timeScale = 0.0003
+    
+    // 使用多个噪声函数组合创建复杂的流场
+    const angle1 = Math.sin(x * scale + time * timeScale) * Math.cos(y * scale * 1.2 + time * timeScale * 0.8) * Math.PI
+    const angle2 = Math.cos(x * scale * 0.8 - time * timeScale * 0.5) * Math.sin(y * scale * 1.5 + time * timeScale * 1.2) * Math.PI
+    
+    const angle = (angle1 + angle2) * 0.5
+    return {
+      x: Math.cos(angle),
+      y: Math.sin(angle)
+    }
+  }
+
+  // 绘制辉光效果
+  const drawGlow = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string, intensity: number) => {
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, size * 4)
+    gradient.addColorStop(0, color.replace(')', `, ${intensity})`).replace('rgb', 'rgba'))
+    gradient.addColorStop(1, color.replace(')', ', 0)').replace('rgb', 'rgba'))
+    
+    ctx.fillStyle = gradient
+    ctx.beginPath()
+    ctx.arc(x, y, size * 4, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  // 主动画循环
+  const animate = (time: number) => {
     const canvas = canvasRef.current
     if (!canvas) return
     
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     
-    // 计算时间增量
-    const deltaTime = timestamp - (timeRef.current || timestamp)
-    timeRef.current = timestamp
+    // 清除画布
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
     
-    // 更新滚动故障强度
-    const scrollY = typeof window !== 'undefined' ? window.scrollY : 0
-    const scrollDelta = Math.abs(scrollY - lastScrollYRef.current)
-    lastScrollYRef.current = scrollY
+    // 获取当前主题颜色
+    const colors = getThemeColors()
     
-    // 滚动超过阈值时增加故障
-    if (scrollDelta > 10) {
-      glitchIntensityRef.current = Math.min(1, glitchIntensityRef.current + scrollDelta * 0.01)
-    } else {
-      // 缓慢恢复
-      glitchIntensityRef.current *= 0.95
+    // 时间增量
+    const deltaTime = time - (timeRef.current || time)
+    timeRef.current = time
+    const normalizedDeltaTime = Math.min(deltaTime / 16, 2)
+    
+    // 当前能量水平
+    const energyLevel = energyLevelRef.current
+    
+    // 绘制背景网格
+    ctx.lineWidth = 1
+    ctx.strokeStyle = colors.gridLines[0]
+    ctx.beginPath()
+    
+    // 计算网格视口偏移
+    const scrollOffset = window.scrollY
+    const viewOffset = scrollOffset * 0.1
+    
+    // 水平网格线
+    for (let y = -100; y < canvas.height + 100; y += 50) {
+      const offset = (y + viewOffset) % 100
+      const yPos = y - offset
+      
+      ctx.moveTo(0, yPos)
+      
+      // 添加波动效果
+      for (let x = 0; x < canvas.width; x += 5) {
+        const distortion = getGridDistortion(x, yPos, time)
+        ctx.lineTo(x, yPos + distortion.y * 0.3)
+      }
+    }
+    ctx.stroke()
+    
+    // 垂直网格线
+    ctx.beginPath()
+    ctx.strokeStyle = colors.gridLines[1]
+    for (let x = -100; x < canvas.width + 100; x += 50) {
+      const offset = x % 100
+      const xPos = x - offset
+      
+      ctx.moveTo(xPos, 0)
+      
+      // 添加波动效果
+      for (let y = 0; y < canvas.height; y += 5) {
+        const distortion = getGridDistortion(xPos, y, time)
+        ctx.lineTo(xPos + distortion.x * 0.3, y)
+      }
+    }
+    ctx.stroke()
+    
+    // 更新和绘制网格节点
+    for (let i = 0; i < gridNodesRef.current.length; i++) {
+      const node = gridNodesRef.current[i]
+      
+      // 计算扭曲
+      const distortion = getGridDistortion(node.baseX, node.baseY, time)
+      node.x = node.baseX + distortion.x
+      node.y = node.baseY + distortion.y
+      
+      // 更新节点状态
+      if (node.active) {
+        node.pulseTime += normalizedDeltaTime
+        
+        if (node.pulseTime > 200) {
+          node.active = Math.random() < 0.3
+          node.energy = Math.max(node.energy * 0.9, 0.2)
+        }
+      }
+      
+      // 随时间呼吸效果
+      const pulse = Math.sin(time * 0.001 + node.phase) * 0.5 + 0.5
+      const nodeSize = node.baseSize * (1 + pulse * 0.5 * node.energy * energyLevel)
+      node.size = nodeSize
+      
+      // 鼠标附近节点激活
+      if (mousePosition) {
+        const dx = node.x - mousePosition.x
+        const dy = node.y - mousePosition.y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        
+        if (dist < 100) {
+          node.active = true
+          node.energy = Math.min(node.energy + (1 - dist / 100) * 0.01 * normalizedDeltaTime, 1)
+        }
+      }
+      
+      // 绘制节点
+      const intensity = 0.1 + node.energy * 0.6 * energyLevel
+      
+      // 绘制辉光
+      if (node.energy > 0.3) {
+        drawGlow(ctx, node.x, node.y, nodeSize, node.color, intensity * 0.3)
+      }
+      
+      // 绘制节点核心
+      ctx.fillStyle = node.color
+      ctx.beginPath()
+      ctx.arc(node.x, node.y, nodeSize, 0, Math.PI * 2)
+      ctx.fill()
     }
     
-    // 清空画布
-    const isDark = theme === 'dark'
-    ctx.fillStyle = isDark ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.95)'
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    // 绘制节点连接
+    ctx.lineWidth = 1
+    ctx.strokeStyle = colors.gridConnection
+    ctx.beginPath()
     
-    // 绘制网格
-    drawGrid(ctx, timestamp, canvas.width, canvas.height, glitchIntensityRef.current)
+    const visibleNodes = gridNodesRef.current.filter(node => 
+      node.x >= -50 && node.x <= canvas.width + 50 && 
+      node.y >= -50 && node.y <= canvas.height + 50
+    )
     
-    // 绘制雪花噪点区域
-    drawSnow(ctx, timestamp, glitchIntensityRef.current)
+    for (const node of visibleNodes) {
+      for (const connIndex of node.connections) {
+        const connNode = gridNodesRef.current[connIndex]
+        
+        if (connNode) {
+          // 只绘制在视口内的连接
+          if (connNode.x >= -50 && connNode.x <= canvas.width + 50 && 
+              connNode.y >= -50 && connNode.y <= canvas.height + 50) {
+            
+            // 能量脉冲效果
+            if (node.active && connNode.active) {
+              const energyFactor = (node.energy + connNode.energy) * 0.5
+              if (energyFactor > 0.4) {
+                ctx.strokeStyle = node.color.replace(')', `, ${energyFactor * 0.3})`).replace('rgb', 'rgba')
+                ctx.lineWidth = 1 + energyFactor
+                
+                ctx.beginPath()
+                ctx.moveTo(node.x, node.y)
+                ctx.lineTo(connNode.x, connNode.y)
+                ctx.stroke()
+                
+                // 恢复默认样式
+                ctx.strokeStyle = colors.gridConnection
+                ctx.lineWidth = 1
+                continue
+              }
+            }
+            
+            // 普通连接线
+            ctx.moveTo(node.x, node.y)
+            ctx.lineTo(connNode.x, connNode.y)
+          }
+        }
+      }
+    }
+    ctx.stroke()
     
-    // 在严重故障时应用全局效果
-    if (glitchIntensityRef.current > 0.2) {
-      drawGlobalGlitch(ctx, canvas.width, canvas.height, glitchIntensityRef.current)
+    // 更新和绘制流线
+    for (let i = 0; i < flowLinesRef.current.length; i++) {
+      const line = flowLinesRef.current[i]
+      
+      // 更新点的年龄
+      for (let j = 0; j < line.points.length; j++) {
+        line.points[j].age += normalizedDeltaTime * line.speed
+      }
+      
+      // 移除过老的点
+      line.points = line.points.filter(point => point.age < 100)
+      
+      // 添加新点
+      if (line.points.length > 0 && line.points.length < line.maxPoints && line.active) {
+        const lastPoint = line.points[line.points.length - 1]
+        const flow = getFlowVector(lastPoint.x, lastPoint.y, time)
+        
+        // 流线头部方向有小概率变化
+        if (Math.random() < 0.1) {
+          flow.x += (Math.random() - 0.5) * 0.5
+          flow.y += (Math.random() - 0.5) * 0.5
+        }
+        
+        // 鼠标靠近时流线受到吸引
+        if (mousePosition) {
+          const dx = mousePosition.x - lastPoint.x
+          const dy = mousePosition.y - lastPoint.y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          
+          if (dist < 200) {
+            const factor = 0.2 * (1 - dist / 200)
+            flow.x += (dx / dist) * factor
+            flow.y += (dy / dist) * factor
+          }
+        }
+        
+        // 正则化向量
+        const length = Math.sqrt(flow.x * flow.x + flow.y * flow.y)
+        flow.x /= length
+        flow.y /= length
+        
+        // 添加新点
+        const newX = lastPoint.x + flow.x * line.speed * 3
+        const newY = lastPoint.y + flow.y * line.speed * 3
+        
+        // 如果点出界，则在边缘创建新流线
+        if (newX < -50 || newX > canvas.width + 50 || newY < -50 || newY > canvas.height + 50) {
+          line.active = false
+          
+          // 在视口边缘创建新流线
+          if (Math.random() < 0.8) {
+            // 重置流线
+            const side = Math.floor(Math.random() * 4)
+            let x = 0, y = 0
+            
+            switch (side) {
+              case 0: // 上
+                x = Math.random() * canvas.width
+                y = -10
+                break
+              case 1: // 右
+                x = canvas.width + 10
+                y = Math.random() * canvas.height
+                break
+              case 2: // 下
+                x = Math.random() * canvas.width
+                y = canvas.height + 10
+                break
+              case 3: // 左
+                x = -10
+                y = Math.random() * canvas.height
+                break
+            }
+            
+            line.points = [{ x, y, age: 0 }]
+            line.active = true
+          }
+        } else {
+          line.points.push({ x: newX, y: newY, age: 0 })
+        }
+      }
+      
+      // 流线消失后重生
+      if (line.points.length === 0) {
+        // 在随机位置创建新流线
+        const x = Math.random() * canvas.width
+        const y = Math.random() * canvas.height
+        
+        line.points = [{ x, y, age: 0 }]
+        line.active = true
+        line.color = colors.flowLines[Math.floor(Math.random() * colors.flowLines.length)]
+      }
+      
+      // 绘制流线
+      if (line.points.length > 1) {
+        ctx.beginPath()
+        ctx.strokeStyle = line.color.replace(')', `, ${line.opacity})`).replace('rgb', 'rgba')
+        ctx.lineWidth = line.width * line.energy * energyLevel
+        
+        // 绘制路径
+        ctx.moveTo(line.points[0].x, line.points[0].y)
+        
+        for (let j = 1; j < line.points.length; j++) {
+          const p0 = line.points[j - 1]
+          const p1 = line.points[j]
+          
+          // 使用二次贝塞尔曲线平滑流线
+          if (j < line.points.length - 1) {
+            const p2 = line.points[j + 1]
+            const xc = (p1.x + p2.x) / 2
+            const yc = (p1.y + p2.y) / 2
+            ctx.quadraticCurveTo(p1.x, p1.y, xc, yc)
+          } else {
+            ctx.lineTo(p1.x, p1.y)
+          }
+        }
+        
+        ctx.stroke()
+        
+        // 流线头部发光效果
+        if (line.points.length > 0) {
+          const head = line.points[line.points.length - 1]
+          drawGlow(ctx, head.x, head.y, line.width * 1.5, line.color, line.opacity * 0.7)
+        }
+      }
+    }
+    
+    // 更新和绘制光粒子
+    for (let i = 0; i < particlesRef.current.length; i++) {
+      const particle = particlesRef.current[i]
+      
+      // 更新粒子位置
+      particle.x += Math.cos(particle.angle) * particle.speed * normalizedDeltaTime
+      particle.y += Math.sin(particle.angle) * particle.speed * normalizedDeltaTime
+      
+      // 更新粒子生命
+      particle.life += normalizedDeltaTime
+      
+      // 光粒子出界或生命结束后重置
+      if (particle.x < -50 || particle.x > canvas.width + 50 || 
+          particle.y < -50 || particle.y > canvas.height + 50 ||
+          particle.life > particle.maxLife) {
+        
+        // 80%概率从边缘重新进入
+        if (Math.random() < 0.8) {
+          const side = Math.floor(Math.random() * 4)
+          
+          switch (side) {
+            case 0: // 上
+              particle.x = Math.random() * canvas.width
+              particle.y = -10
+              particle.angle = Math.random() * Math.PI * 0.5 + Math.PI * 0.25 // 向下运动
+              break
+            case 1: // 右
+              particle.x = canvas.width + 10
+              particle.y = Math.random() * canvas.height
+              particle.angle = Math.random() * Math.PI * 0.5 + Math.PI * 0.75 // 向左运动
+              break
+            case 2: // 下
+              particle.x = Math.random() * canvas.width
+              particle.y = canvas.height + 10
+              particle.angle = Math.random() * Math.PI * 0.5 + Math.PI * 1.25 // 向上运动
+              break
+            case 3: // 左
+              particle.x = -10
+              particle.y = Math.random() * canvas.height
+              particle.angle = Math.random() * Math.PI * 0.5 + Math.PI * 1.75 // 向右运动
+              break
+          }
+        } else {
+          // 随机位置
+          particle.x = Math.random() * canvas.width
+          particle.y = Math.random() * canvas.height
+          particle.angle = Math.random() * Math.PI * 2
+        }
+        
+        particle.life = 0
+        particle.opacity = 0.3 + Math.random() * 0.5
+        particle.size = 1 + Math.random() * 3
+        particle.maxLife = 100 + Math.random() * 200
+        particle.color = colors.particles[Math.floor(Math.random() * colors.particles.length)]
+      }
+      
+      // 轻微改变粒子角度
+      if (Math.random() < 0.05) {
+        particle.angle += (Math.random() - 0.5) * 0.3
+      }
+      
+      // 鼠标附近粒子受到吸引
+      if (mousePosition) {
+        const dx = mousePosition.x - particle.x
+        const dy = mousePosition.y - particle.y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        
+        if (dist < 150) {
+          const targetAngle = Math.atan2(dy, dx)
+          const angleDiff = targetAngle - particle.angle
+          
+          // 规范化角度差到 -PI 到 PI 之间
+          const normalizedDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff))
+          
+          // 逐渐调整角度
+          particle.angle += normalizedDiff * 0.03 * normalizedDeltaTime
+        }
+      }
+      
+      // 计算粒子不透明度（根据生命周期淡入淡出）
+      const lifecycleFactor = 1 - Math.abs(particle.life / particle.maxLife * 2 - 1)
+      const displayOpacity = particle.opacity * lifecycleFactor
+      
+      // 绘制粒子
+      drawGlow(ctx, particle.x, particle.y, particle.size, particle.color, displayOpacity * 0.5)
+      
+      // 绘制粒子核心
+      ctx.fillStyle = particle.color.replace(')', `, ${displayOpacity})`).replace('rgb', 'rgba')
+      ctx.beginPath()
+      ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2)
+      ctx.fill()
     }
     
     // 继续动画循环
     requestRef.current = requestAnimationFrame(animate)
   }
-  
-  // 监听窗口大小变化
+
+  // 点击事件处理程序
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY })
+    }
+    
+    const handleMouseLeave = () => {
+      setMousePosition(null)
+    }
+    
+    // 点击激活网格节点
+    const handleClick = () => {
+      if (mousePosition && gridNodesRef.current.length > 0) {
+        // 找到最近的节点
+        let closestNode: GridNode | null = null
+        let closestDist = Infinity
+        
+        for (const node of gridNodesRef.current) {
+          const dx = node.x - mousePosition.x
+          const dy = node.y - mousePosition.y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          
+          if (dist < closestDist) {
+            closestDist = dist
+            closestNode = node
+          }
+        }
+        
+        // 激活最近的节点及其附近节点
+        if (closestNode && closestDist < 100) {
+          const index = gridNodesRef.current.indexOf(closestNode)
+          activateNode(index, 1.0)
+          
+          // 创建从鼠标到节点的流线
+          const colors = getThemeColors().flowLines
+          flowLinesRef.current.push({
+            points: [
+              { x: mousePosition.x, y: mousePosition.y, age: 0 },
+              { x: closestNode.x, y: closestNode.y, age: 0 }
+            ],
+            width: 2,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            speed: 2 + Math.random() * 3,
+            maxPoints: 10,
+            opacity: 0.7,
+            energy: 1,
+            active: true
+          })
+        }
+      }
+      
+      // 增加整体能量
+      energyLevelRef.current = Math.min(energyLevelRef.current + 0.3, 2)
+      setTimeout(() => {
+        energyLevelRef.current = Math.max(energyLevelRef.current - 0.3, 1)
+      }, 2000)
+    }
+    
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseleave', handleMouseLeave)
+    window.addEventListener('click', handleClick)
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseleave', handleMouseLeave)
+      window.removeEventListener('click', handleClick)
+    }
+  }, [])
+
+  // 窗口大小变化处理
   useEffect(() => {
     if (typeof window === 'undefined') return
 
@@ -501,25 +722,8 @@ export default function DataFlowBackground() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
-  
-  // 监听滚动
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    
-    const handleScroll = () => {
-      scrollYRef.current = window.scrollY
-      
-      // 随机触发严重故障
-      if (Math.abs(scrollYRef.current - lastScrollYRef.current) > 50) {
-        glitchIntensityRef.current = 1
-      }
-    }
-    
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
-  
-  // 初始化并启动动画
+
+  // 初始化和动画处理
   useEffect(() => {
     if (typeof window === 'undefined') return
     
@@ -530,8 +734,14 @@ export default function DataFlowBackground() {
     canvas.width = dimensions.width
     canvas.height = dimensions.height
     
-    // 初始化网格
-    gridRef.current = createGrid(dimensions.width, dimensions.height)
+    // 初始化网格节点
+    gridNodesRef.current = initGridNodes(dimensions.width, dimensions.height)
+    
+    // 初始化流线
+    flowLinesRef.current = initFlowLines(dimensions.width, dimensions.height)
+    
+    // 初始化光粒子
+    particlesRef.current = initParticles(dimensions.width, dimensions.height)
     
     // 开始动画循环
     requestRef.current = requestAnimationFrame(animate)
