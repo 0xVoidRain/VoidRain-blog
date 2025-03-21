@@ -5,7 +5,7 @@ const siteMetadata = {
   headerTitle: 'VoidRainBlog',
   description: '在虚无的雨中，重建所有规则',
   language: 'cn',
-  theme: 'system', // system, dark or light
+  theme: 'dark', // system, dark or light
   siteUrl: 'https://voidrain-blog.vercel.app/',
   siteRepo: 'https://github.com/0xVoidRain/VoidRain-blog',
   siteLogo: `${process.env.BASE_PATH || ''}/static/images/logo.png`,
@@ -13,7 +13,7 @@ const siteMetadata = {
   mastodon: 'https://mastodon.social/@mastodonuser',
   email: 'betterme365d@gmail.com',
   github: 'https://github.com',
-  x: 'https://twitter.com/x',
+  x: 'https://x.com/0xVoidRain',
   // twitter: 'https://twitter.com/Twitter',
   facebook: 'https://facebook.com',
   youtube: 'https://youtube.com',
