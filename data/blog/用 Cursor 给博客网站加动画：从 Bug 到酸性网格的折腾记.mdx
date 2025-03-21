@@ -1,0 +1,146 @@
+---
+title: "用 Cursor 给博客网站加动画：从 Bug 到酸性网格的折腾记"
+date: 2025-03-21
+tags: [开发, Cursor, 动画效果]
+summary: "用 Cursor 给博客网站加动画，撞上一堆 bug：Prettier 格式化错误、模块缺失、组件重复、Vercel 锁文件冲突。全程靠 AI 摸索，从跳过检查到 vercel.json 救场，最后搞出酸性扭曲网格。过程乱中有趣，AI 时代脑洞随便飞。"
+---
+## 用 Cursor 给博客网站加动画：从 Bug 到酸性网格的折腾记
+
+### 1. 起因：想给博客加点动感
+
+博客搭好了，静态页面看着太干巴，我想加点动画背景，让“Voidrain”这名字有点视觉灵魂。工具选了 Cursor，一个带 AI 的代码编辑器，听说能帮我生成代码，还能修 bug，然后和deepseek聊天写提示词（开始帮我想的是数据湍流）。我的目标是用 Next.js 搞个动态背景，过程全靠自己摸，外加 Cursor 推一把。结果呢？一堆坑，但也挺好玩。
+
+---
+
+### 2. 开头就翻车：Prettier 格式化错误
+
+刚动手，Cursor 给我生成了一堆代码，准备在 Next.js 项目里加动画。可跑起来一看，终端红了一片，全是 Prettier 格式化错误。tsx 文件里类型定义和格式化规则打架，build 不下去。我问 Cursor，它给了俩方案：
+
+#### 方案 1：跳过类型和格式检查
+
+它让我改 `next.config.js`，临时关掉类型和 ESLint 检查：
+
+```javascript
+const { withContentlayer } = require('next-contentlayer2');
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+});
+
+module.exports = () => {
+  const plugins = [withContentlayer, withBundleAnalyzer];
+  return plugins.reduce((acc, next) => next(acc), {
+    typescript: {
+      ignoreBuildErrors: true,
+    },
+    eslint: {
+      ignoreDuringBuilds: true,
+    },
+  });
+};
+```
+
+这招先不管格式，直接跑。刚开始管用，项目能 build 了，可后来部署时又炸，动画没影儿，bug 还是没解决。Cursor 这方案像个急救包，治标不治本。
+
+#### 方案 2：自动格式化文件
+
+Cursor 又说，试试 Prettier 自动修所有文件，跑这命令：
+
+```bash
+npx prettier --write "components/**/*.tsx" "app/**/*.tsx" "layouts/**/*.tsx"
+```
+
+我照做，把改动推到 GitHub，格式化的确干净了。部署成功，可一看网站，动画还是没出来。打开浏览器开发者工具，日志一堆报错，Cursor 让我分析问题。
+
+---
+
+### 3. 动画不显示：模块和组件的坑
+
+日志里几个大问题跳出来：
+
+- **缺少依赖模块**：报错说找不到 `react`、`next-themes` 等模块。我查了 `package.json`，依赖是装了的，但 Cursor 让我再跑一次 `npm install`，清理下 `node_modules`。折腾完，模块有了，可动画还是不显示。
+- **组件没加载到所有页面**：我发现动画背景只加进了 `Main.tsx`（主页），其他页面没影儿。Cursor 说，动画得放全局，得改 `app/layout.tsx`。我加了代码，可这下网站顶部和底部各多了俩重复的排版。
+
+**重复排版的锅**
+Cursor 分析，可能是布局结构有问题：
+在 `app/layout.tsx` 里，我加了 `<LayoutWrapper>` 包住 `SearchProvider` 和内容。
+
+可 `LayoutWrapper` 本身可能已经包含了 `Header` 和 `Footer`，导致重复渲染。
+
+我翻开 `LayoutWrapper.tsx`，果然，里头有 `Header` 和 `Footer`。`app/layout.tsx` 又包了一层，结果渲染了两遍。Cursor 让我调整结构：
+
+```javascript
+// app/layout.tsx
+import { LayoutWrapper } from '../components/LayoutWrapper';
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        <LayoutWrapper>{children}</LayoutWrapper>
+      </body>
+    </html>
+  );
+}
+```
+
+确保 LayoutWrapper 只管全局布局，`Header` 和 `Footer` 不重复。改完，重复没了，可动画还是半死不活。
+
+---
+
+### 4. Vercel 部署的锁文件噩梦
+
+本地跑得好好的，推到 Vercel 部署又炸。报错全是锁文件冲突，yarn.lock 和 Vercel 的构建环境不匹配。试了好几次，Cursor 让我加配置修版本，折腾半天还是不行。它最后甩了个直接方案：
+
+方案：加 `vercel.json`
+创建一个 `vercel.json` 文件，强制用 npm 部署，绕过 Yarn 的锁文件检查：
+
+```json
+{
+"installCommand": "npm install --no-package-lock",
+"buildCommand": "npm run build",
+"framework": "nextjs"
+}
+```
+
+- 用 npm 装依赖，不生成 package-lock.json，避开冲突。
+- 构建照常跑 npm run build。
+
+我加了文件，推到 GitHub，Vercel 这次没炸，部署成功。Cursor 还说，本地想彻底解决，得删 `yarn.lock`，跑 `yarn install` 重建锁文件。我懒得弄本地，部署通了就算赢。
+
+---
+
+### 5. 动画成型：从提示词到酸性网格
+
+折腾完部署，动画终于能跑。我开始改提示词，试不同视觉效果。Cursor 给了几个点子，我嫌太普通，又跑去 DeepSeek 要了个酷的：酸性扭曲网格。
+
+**视觉特征**
+
+- 网格线条像波浪，不规则扭曲，配霓虹渐变（蓝紫到荧光绿）。
+- 边缘加故障艺术效果，RGB 通道错位，像像素撕裂。
+
+**动态效果**
+
+- 网格按螺旋轨迹慢转，节点随机冒出雨滴粒子。
+- 文字悬浮时，局部网格放大，像放大镜。
+
+**Cursor 帮我生成：**
+
+[源代码](https://github.com/0xVoidRain/VoidRain-blog/blob/main/components/DataFlowBackground.tsx)
+
+效果还行，又继续改提示词试来试去。DeepSeek 的赛博朋克风挺搭我的博客，懒得再改，就用了。
+
+---
+
+### 6. 对 AI 的感悟：乱中取乐
+
+全程靠 Cursor 和 DeepSeek，AI 真是个怪东西。`Prettier` 错误它能甩好几个方案，部署炸了它能挖出 `vercel.json`，动画效果还能按我想法调。不是它多聪明，是它能陪我试错。代码崩了，我问一句，它改一句，像个不会累的搭档。
+
+AI 时代有趣在哪？脑子里的点子随便飞，敲几句提示词，就能看到东西跑出来。以前得自己啃文档，现在 AI 帮我填坑，速度快到离谱。当然，它也瞎搞，有的方案 治标不治本，得调试好多次。不过这过程挺带劲，像跟个半吊子朋友一起玩游戏通关，乱中有乐。
+
+AI可以使人省点脑力，让我想干的事快点成型。博客动画搞完，看着网格扭来扭去，我挺满足。脑洞还能再飞，下一波再折腾。
+
+### 7. 结尾：从坑到网格的收获
+
+从 Prettier 格式化错误，到模块缺失、组件重复，再到 Vercel 锁文件冲突，一路坑不少。Cursor 带着我跳，DeepSeek 给个酸性网格收尾。AI 帮我省时间，我拿时间换乐子，挺值。
+
+---
