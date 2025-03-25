@@ -5,7 +5,7 @@ const siteMetadata = {
   headerTitle: 'VoidRainBlog',
   description: '在虚无的雨中，重建所有规则',
   language: 'cn',
-  theme: 'dark', // system, dark or light
+  theme: 'light', // system, dark or light
   siteUrl: 'https://voidrain-blog.vercel.app/',
   siteRepo: 'https://github.com/0xVoidRain/VoidRain-blog',
   siteLogo: `${process.env.BASE_PATH || ''}/static/images/logo.png`,
