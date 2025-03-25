@@ -511,8 +511,25 @@ export default function DataFlowBackground() {
     }
   }, [dimensions, theme])
 
-  if (typeof window === 'undefined') return null
-
+  const [mounted, setMounted] = useState(false)
+  
+  // 确保组件仅在客户端渲染
+  useEffect(() => {
+    setMounted(true)
+    
+    // 以下是你的 canvas 初始化和动画代码
+    if (canvasRef.current) {
+      // ... 你的现有 canvas 代码 ...
+    }
+    
+    return () => {
+      // 清理代码
+    }
+  }, [theme])
+  
+  // 仅在客户端渲染
+  if (!mounted) return null
+  
   return (
     <canvas
       ref={canvasRef}
