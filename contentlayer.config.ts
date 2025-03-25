@@ -86,10 +86,10 @@ function createSearchIndex(allBlogs) {
     siteMetadata.search.kbarConfig.searchDocumentsPath
   ) {
     writeFileSync(
-      `public/${path.basename(siteMetadata.search.kbarConfig.searchDocumentsPath)}`,
+      `public/${siteMetadata.search.kbarConfig.searchDocumentsPath}`,
       JSON.stringify(allCoreContent(sortPosts(allBlogs)))
     )
-    console.log('Local search index generated...')
+    console.log('本地搜索索引已生成...')
   }
 }
 
