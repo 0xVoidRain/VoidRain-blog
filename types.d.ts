@@ -101,4 +101,8 @@ declare module 'rehype-preset-minify' {
 declare module 'prettier' {
   const prettier: any;
   export default prettier;
+}
+
+interface Window {
+  toggleSearch?: () => void;
 } 
