@@ -102,7 +102,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SectionContainer>
             <LayoutWrapper>
               <CustomSearch>
-                <main className="mb-auto">{children}</main>
+                {children}
               </CustomSearch>
             </LayoutWrapper>
           </SectionContainer>
