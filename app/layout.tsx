@@ -10,7 +10,7 @@ import LayoutWrapper from '@/components/LayoutWrapper'
 import siteMetadata from '@/data/siteMetadata'
 import { ThemeProviders } from './theme-providers'
 import { Metadata } from 'next'
-import dynamic from 'next/dynamic'
+import ClientDataFlowBackground from '@/components/ClientDataFlowBackground'
 import CustomSearch from '@/components/CustomSearch'
 
 const space_grotesk = Space_Grotesk({
@@ -18,12 +18,6 @@ const space_grotesk = Space_Grotesk({
   display: 'swap',
   variable: '--font-space-grotesk',
 })
-
-// 动态导入仅在客户端渲染的组件
-const DataFlowBackground = dynamic(
-  () => import('@/components/DataFlowBackground'),
-  { ssr: false }
-)
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteMetadata.siteUrl),
@@ -103,7 +97,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <link rel="alternate" type="application/rss+xml" href={`${basePath}/feed.xml`} />
       <body className="bg-white pl-[calc(100vw-100%)] text-black antialiased dark:bg-gray-950 dark:text-white" suppressHydrationWarning>
         <ThemeProviders>
-          <DataFlowBackground />
+          <ClientDataFlowBackground />
           <Analytics analyticsConfig={siteMetadata.analytics as AnalyticsConfig} />
           <SectionContainer>
             <LayoutWrapper>
