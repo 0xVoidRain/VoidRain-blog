@@ -61,11 +61,11 @@ const unoptimized = process.env.UNOPTIMIZED ? true : undefined
 /**
  * @type {import('next/dist/next-server/server/config').NextConfig}
  **/
-module.exports = ({ reactStrictMode }) => {
-  const composedPlugins = withContentlayer(withBundleAnalyzer)
-
-  const nextConfig = composedPlugins({
-    reactStrictMode,
+module.exports = () => {
+  // 正确的插件组合方式
+  const plugins = [withContentlayer, withBundleAnalyzer]
+  return plugins.reduce((acc, plugin) => plugin(acc), {
+    reactStrictMode: false,
     basePath: process.env.BASE_PATH,
     ...(process.env.BASE_PATH && {
       assetPrefix: process.env.BASE_PATH,
@@ -98,9 +98,8 @@ module.exports = ({ reactStrictMode }) => {
     typescript: {
       ignoreBuildErrors: true,
     },
+    // 将实验性选项移至顶层
     skipTrailingSlashRedirect: true,
     skipMiddlewareUrlNormalize: true,
   })
-
-  return nextConfig
 }
