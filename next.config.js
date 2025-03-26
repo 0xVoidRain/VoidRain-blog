@@ -61,17 +61,15 @@ const unoptimized = process.env.UNOPTIMIZED ? true : undefined
 /**
  * @type {import('next/dist/next-server/server/config').NextConfig}
  **/
-module.exports = () => {
-  const plugins = [withContentlayer, withBundleAnalyzer]
-  const nextConfig = plugins.reduce((acc, next) => next(acc), {
-    output,
-    basePath,
-    reactStrictMode: false,
-    pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
-    eslint: {
-      dirs: ['app', 'components', 'layouts', 'scripts'],
-      ignoreDuringBuilds: true,
-    },
+module.exports = ({ reactStrictMode }) => {
+  const composedPlugins = withContentlayer(withBundleAnalyzer)
+
+  const nextConfig = composedPlugins({
+    reactStrictMode,
+    basePath: process.env.BASE_PATH,
+    ...(process.env.BASE_PATH && {
+      assetPrefix: process.env.BASE_PATH,
+    }),
     images: {
       remotePatterns: [
         {
@@ -100,10 +98,8 @@ module.exports = () => {
     typescript: {
       ignoreBuildErrors: true,
     },
-    experimental: {
-      skipTrailingSlashRedirect: true,
-      skipMiddlewareUrlNormalize: true,
-    },
+    skipTrailingSlashRedirect: true,
+    skipMiddlewareUrlNormalize: true,
   })
 
   return nextConfig
