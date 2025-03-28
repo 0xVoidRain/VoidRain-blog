@@ -4,19 +4,19 @@ import { useEffect, useState } from 'react'
 
 const SearchButton = () => {
   const [mounted, setMounted] = useState(false)
-  
+
   useEffect(() => {
     setMounted(true)
   }, [])
-  
+
   if (!mounted) return null
-  
+
   const handleClick = () => {
     if (typeof window !== 'undefined' && window.toggleSearch) {
       window.toggleSearch()
     }
   }
-  
+
   return (
     <button
       type="button"

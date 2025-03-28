@@ -1,9 +1,10 @@
 ---
-title: "用 Cursor 给博客网站加动画：从 Bug 到酸性网格的折腾记"
+title: '用 Cursor 给博客网站加动画：从 Bug 到酸性网格的折腾记'
 date: 2025-03-21
 tags: [开发, Cursor, 动画效果]
-summary: "用 Cursor 给博客网站加动画，撞上一堆 bug：Prettier 格式化错误、模块缺失、组件重复、Vercel 锁文件冲突。全程靠 AI 摸索，从跳过检查到 vercel.json 救场，最后搞出酸性扭曲网格。过程乱中有趣，AI 时代脑洞随便飞。"
+summary: '用 Cursor 给博客网站加动画，撞上一堆 bug：Prettier 格式化错误、模块缺失、组件重复、Vercel 锁文件冲突。全程靠 AI 摸索，从跳过检查到 vercel.json 救场，最后搞出酸性扭曲网格。过程乱中有趣，AI 时代脑洞随便飞。'
 ---
+
 ## 用 Cursor 给博客网站加动画：从 Bug 到酸性网格的折腾记
 
 ### 1. 起因：想给博客加点动感
@@ -21,13 +22,13 @@ summary: "用 Cursor 给博客网站加动画，撞上一堆 bug：Prettier 格�
 它让我改 `next.config.js`，临时关掉类型和 ESLint 检查：
 
 ```javascript
-const { withContentlayer } = require('next-contentlayer2');
+const { withContentlayer } = require('next-contentlayer2')
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
-});
+})
 
 module.exports = () => {
-  const plugins = [withContentlayer, withBundleAnalyzer];
+  const plugins = [withContentlayer, withBundleAnalyzer]
   return plugins.reduce((acc, next) => next(acc), {
     typescript: {
       ignoreBuildErrors: true,
@@ -35,8 +36,8 @@ module.exports = () => {
     eslint: {
       ignoreDuringBuilds: true,
     },
-  });
-};
+  })
+}
 ```
 
 这招先不管格式，直接跑。刚开始管用，项目能 build 了，可后来部署时又炸，动画没影儿，bug 还是没解决。Cursor 这方案像个急救包，治标不治本。
@@ -70,7 +71,7 @@ Cursor 分析，可能是布局结构有问题：
 
 ```javascript
 // app/layout.tsx
-import { LayoutWrapper } from '../components/LayoutWrapper';
+import { LayoutWrapper } from '../components/LayoutWrapper'
 
 export default function RootLayout({ children }) {
   return (
@@ -79,7 +80,7 @@ export default function RootLayout({ children }) {
         <LayoutWrapper>{children}</LayoutWrapper>
       </body>
     </html>
-  );
+  )
 }
 ```
 
@@ -96,9 +97,9 @@ export default function RootLayout({ children }) {
 
 ```json
 {
-"installCommand": "npm install --no-package-lock",
-"buildCommand": "npm run build",
-"framework": "nextjs"
+  "installCommand": "npm install --no-package-lock",
+  "buildCommand": "npm run build",
+  "framework": "nextjs"
 }
 ```
 
