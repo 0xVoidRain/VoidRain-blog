@@ -66,11 +66,11 @@ const ThemeSwitch = () => {
   }
 
   return (
-    <div className="relative ml-1 mr-1 flex items-center">
+    <div className="relative mr-1 ml-1 flex items-center">
       <Menu>
         <MenuButton
           aria-label="Toggle theme"
-          className="focus:outline-hidden rounded p-1 sm:opacity-60 sm:hover:opacity-100"
+          className="rounded p-1 focus:outline-hidden sm:opacity-60 sm:hover:opacity-100"
         >
           {/* 主题按钮 */}
           {theme === 'dark' || resolvedTheme === 'dark' ? (
@@ -98,7 +98,7 @@ const ThemeSwitch = () => {
           )}
         </MenuButton>
         <Transition
-          className="absolute right-0 z-10 mt-8 w-36 origin-top-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+          className="ring-opacity-5 absolute right-0 z-10 mt-8 w-36 origin-top-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black focus:outline-none"
           enter="transition ease-out duration-100"
           enterFrom="transform opacity-0 scale-95"
           enterTo="transform opacity-100 scale-100"

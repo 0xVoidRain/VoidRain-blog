@@ -20,7 +20,7 @@ const SearchButton = () => {
   return (
     <button
       type="button"
-      className="ml-1 mr-1 h-8 w-8 rounded p-1 sm:ml-4"
+      className="mr-1 ml-1 h-8 w-8 rounded p-1 sm:ml-4"
       aria-label="搜索"
       onClick={handleClick}
     >
