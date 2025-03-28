@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Dialog } from '@headlessui/react'
 
 const SearchProvider = ({ children }) => {
@@ -10,6 +10,7 @@ const SearchProvider = ({ children }) => {
   const [searchResults, setSearchResults] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchIndex, setSearchIndex] = useState([])
+  const inputRef = useRef(null)
 
   // 加载搜索索引
   useEffect(() => {
@@ -68,7 +69,25 @@ const SearchProvider = ({ children }) => {
   }, [])
 
   // 公开的API
-  window.toggleSearch = () => setIsOpen(!isOpen)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.toggleSearch = () => setIsOpen(!isOpen)
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+        // 清理函数
+        window.toggleSearch = undefined
+      }
+    }
+  }, [isOpen]);
+
+  // 在组件加载后设置焦点
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isOpen]);
 
   return (
     <>
@@ -83,12 +102,12 @@ const SearchProvider = ({ children }) => {
 
         <div className="relative mx-auto max-w-xl rounded-xl bg-white p-4 shadow-2xl dark:bg-gray-900">
           <input
+            ref={inputRef}
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="搜索文章..."
             className="focus:border-primary-500 w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            autoFocus
           />
 
           {searchResults.length > 0 && (
@@ -102,6 +121,14 @@ const SearchProvider = ({ children }) => {
                       router.push('/' + result.path)
                       setIsOpen(false)
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        router.push('/' + result.path)
+                        setIsOpen(false)
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
                   >
                     <div className="font-medium text-gray-900 dark:text-gray-100">
                       {result.title}
