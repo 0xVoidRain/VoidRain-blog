@@ -31,20 +31,38 @@ const SearchProvider = ({ children }) => {
 
   // 搜索处理函数
   const handleSearch = (query) => {
-    if (!query.trim() || !searchIndex.length) {
+    if (!query.trim() || !searchIndex || !searchIndex.length) {
       setSearchResults([])
       return
     }
 
-    // 简单的搜索算法
-    const results = searchIndex.filter(
-      (item) =>
-        item.title?.toLowerCase().includes(query.toLowerCase()) ||
-        item.summary?.toLowerCase().includes(query.toLowerCase()) ||
-        item.tags?.some((tag) => tag.toLowerCase().includes(query.toLowerCase()))
-    )
+    try {
+      // 添加类型检查，确保搜索结果有效
+      const results = searchIndex.filter(
+        (item) => {
+          if (!item) return false;
+          
+          const titleMatch = item.title && typeof item.title === 'string' 
+            ? item.title.toLowerCase().includes(query.toLowerCase()) 
+            : false;
+          
+          const summaryMatch = item.summary && typeof item.summary === 'string'
+            ? item.summary.toLowerCase().includes(query.toLowerCase())
+            : false;
+          
+          const tagsMatch = item.tags && Array.isArray(item.tags)
+            ? item.tags.some(tag => typeof tag === 'string' && tag.toLowerCase().includes(query.toLowerCase()))
+            : false;
+          
+          return titleMatch || summaryMatch || tagsMatch;
+        }
+      )
 
-    setSearchResults(results)
+      setSearchResults(results)
+    } catch (error) {
+      console.error('搜索处理错误:', error)
+      setSearchResults([])
+    }
   }
 
   // 当搜索查询改变时执行搜索

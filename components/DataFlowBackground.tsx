@@ -3,6 +3,16 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
 
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  color: string;
+  size: number;
+  // 其他必要属性...
+}
+
 export default function DataFlowBackground() {
   const { theme } = useTheme()
   const canvasRef = useRef<HTMLCanvasElement>(null)
