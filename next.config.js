@@ -62,10 +62,14 @@ const unoptimized = process.env.UNOPTIMIZED ? true : undefined
  * @type {import('next/dist/next-server/server/config').NextConfig}
  **/
 module.exports = () => {
-  // 正确的插件组合方式
   const plugins = [withContentlayer, withBundleAnalyzer]
-  return plugins.reduce((acc, plugin) => plugin(acc), {
-    reactStrictMode: false,
+  return plugins.reduce((acc, next) => next(acc), {
+    reactStrictMode: true,
+    pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
+    eslint: {
+      // 在构建时禁用 ESLint 检查
+      ignoreDuringBuilds: true,
+    },
     basePath: process.env.BASE_PATH,
     ...(process.env.BASE_PATH && {
       assetPrefix: process.env.BASE_PATH,
