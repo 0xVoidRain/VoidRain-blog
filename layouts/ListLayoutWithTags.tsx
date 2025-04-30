@@ -9,7 +9,7 @@ import Link from '@/components/Link'
 import Tag from '@/components/Tag'
 import siteMetadata from '@/data/siteMetadata'
 import tagData from 'app/tag-data.json'
-// ���Ƴ� slug-to-original ����
+// 移除 slug-to-original 引用
 
 interface PaginationProps {
   totalPages: number
@@ -81,9 +81,9 @@ export default function ListLayoutWithTags({
 
   const displayPosts = initialDisplayPosts.length > 0 ? initialDisplayPosts : posts
 
-  // 获取标签的原始文本显�?
+  // 获取标签的原始文本显示
   const getOriginalTag = (sluggedTag: string) => {
-    return slugToOriginal[sluggedTag] || sluggedTag
+    return sluggedTag
   }
 
   return (
@@ -109,8 +109,8 @@ export default function ListLayoutWithTags({
               )}
               <ul>
                 {sortedTags.map((t) => {
-                  // 如果 t �?slug 形式，可能需要获取原始标签名
-                  // 这里假设 t 已经是可读的标签名（可能来自 tag-data.json�?
+                  // 如果 t 是 slug 形式，可能需要获取原始标签名
+                  // 这里假设 t 已经是可读的标签名（可能来自 tag-data.json）
                   return (
                     <li key={t} className="my-3">
                       {pathname.startsWith('/tags/') && decodeURIComponent(pathname.split('/tags/')[1]) === t ? (
