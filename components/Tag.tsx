@@ -5,7 +5,7 @@ interface Props {
 }
 
 const Tag = ({ text }: Props) => {
-  const encodedTag = encodeURIComponent(slug(text))
+  const encodedTag = slug(text)
   
   return (
     <Link
