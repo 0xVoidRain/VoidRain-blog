@@ -1,21 +1,21 @@
 import Link from 'next/link'
-import { formatTagForUrl } from '../utils/tag'
+import { formatTag } from 'utils/tag'
 
 interface Props {
   text: string
+  className?: string
 }
 
-const Tag = ({ text }: Props) => {
-  const encodedTag = encodeURIComponent(formatTagForUrl(text))
-  
+const Tag = ({ text, className }: Props) => {
   return (
     <Link
-      href={`/tags/${encodedTag}`}
-      className="text-primary-500 hover:text-primary-600 dark:hover:text-primary-400 mr-3 text-sm font-medium uppercase"
+      href={`/blog/tag/${formatTag(text)}`}
+      title={text.split(' ').join('-')}
+      className={`mr-3 text-sm font-medium uppercase text-primary-500 hover:text-primary-600 dark:hover:text-primary-400 ${className}`}
     >
-      {text}
+      {text.split(' ').join('-')}
     </Link>
   )
 }
 
-export default Tag 
+export default Tag
