@@ -152,45 +152,7 @@ export const Authors = defineDocumentType(() => ({
   computedFields,
 }))
 
-export default makeSource({
-  contentDirPath: 'data',
-  documentTypes: [Blog, Authors],
-  mdx: {
-    cwd: process.cwd(),
-    remarkPlugins: [
-      remarkExtractFrontmatter,
-      remarkGfm,
-      remarkCodeTitles,
-      remarkMath,
-      remarkImgToJsx,
-      remarkAlert,
-    ],
-    rehypePlugins: [
-      rehypeSlug,
-      [
-        rehypeAutolinkHeadings,
-        {
-          behavior: 'prepend',
-          headingProperties: {
-            className: ['content-header'],
-          },
-          content: icon,
-        },
-      ],
-      rehypeKatex,
-      rehypeKatexNoTranslate,
-      [rehypeCitation, { path: path.join(root, 'data') }],
-      [rehypePrismPlus, { defaultLanguage: 'js', ignoreMissing: true }],
-      rehypePresetMinify,
-    ],
-  },
-  onSuccess: async (importData) => {
-    const { allBlogs } = await importData()
-    createTagCount(allBlogs)
-    createSearchIndex(allBlogs)
-  },
-})
-// 在文件最底部添加这行代码，确保默认导出被识别
+// 删除第一个默认导出，只保留最后一个
 const source = makeSource({
   contentDirPath: 'data',
   documentTypes: [Blog, Authors],
