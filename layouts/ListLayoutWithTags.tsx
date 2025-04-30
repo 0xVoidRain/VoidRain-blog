@@ -1,7 +1,6 @@
+/* eslint-disable jsx-a11y/anchor-is-valid */
 'use client'
 
-import { usePathname } from 'next/navigation'
-import { formatTagForUrl, getTagFromUrl } from '../utils/tag'
 import { formatDate } from 'pliny/utils/formatDate'
 import { CoreContent } from 'pliny/utils/contentlayer'
 import type { Blog } from 'contentlayer/generated'
@@ -9,33 +8,31 @@ import Link from '@/components/Link'
 import Tag from '@/components/Tag'
 import siteMetadata from '@/data/siteMetadata'
 import tagData from 'app/tag-data.json'
-// 移除 slug-to-original 引用
+import { createTagTree, removeTagBrackets } from 'utils/tag'
+import { Tree } from '@douyinfe/semi-ui'
+import { useMemo, useState } from 'react'
+import { Tag as SemiTag, SideSheet as SemiSideSheet, Button as SemiButton } from '@douyinfe/semi-ui'
+import { IconFilter } from '@douyinfe/semi-icons'
 
 interface PaginationProps {
   totalPages: number
   currentPage: number
+  onPageChange: (page: number) => void
 }
 interface ListLayoutProps {
   posts: CoreContent<Blog>[]
   title: string
-  initialDisplayPosts?: CoreContent<Blog>[]
-  pagination?: PaginationProps
+  filterTag?: string // 跳转页面携带的 tag 用于过滤
 }
 
-function Pagination({ totalPages, currentPage }: PaginationProps) {
-  const pathname = usePathname()
-  const segments = pathname.split('/')
-  const lastSegment = segments[segments.length - 1]
-  const basePath = pathname
-    .replace(/^\//, '') // Remove leading slash
-    .replace(/\/page\/\d+$/, '') // Remove any trailing /page
-  console.log(pathname)
-  console.log(basePath)
+const POSTS_PER_PAGE = 5
+
+function Pagination({ totalPages, currentPage, onPageChange }: PaginationProps) {
   const prevPage = currentPage - 1 > 0
   const nextPage = currentPage + 1 <= totalPages
 
   return (
-    <div className="space-y-2 pt-6 pb-8 md:space-y-5">
+    <div className="space-y-2 pb-2 pt-6 md:space-y-5">
       <nav className="flex justify-between">
         {!prevPage && (
           <button className="cursor-auto disabled:opacity-50" disabled={!prevPage}>
@@ -43,12 +40,12 @@ function Pagination({ totalPages, currentPage }: PaginationProps) {
           </button>
         )}
         {prevPage && (
-          <Link
-            href={currentPage - 1 === 1 ? `/${basePath}/` : `/${basePath}/page/${currentPage - 1}`}
-            rel="prev"
+          <button
+            className="hover:text-primary-600 dark:hover:text-primary-400"
+            onClick={() => onPageChange(currentPage - 1 === 1 ? 1 : currentPage - 1)}
           >
             Previous
-          </Link>
+          </button>
         )}
         <span>
           {currentPage} of {totalPages}
@@ -59,120 +56,144 @@ function Pagination({ totalPages, currentPage }: PaginationProps) {
           </button>
         )}
         {nextPage && (
-          <Link href={`/${basePath}/page/${currentPage + 1}`} rel="next">
+          <button
+            className="hover:text-primary-600 dark:hover:text-primary-400"
+            onClick={() => onPageChange(currentPage + 1)}
+          >
             Next
-          </Link>
+          </button>
         )}
       </nav>
     </div>
   )
 }
 
-export default function ListLayoutWithTags({
-  posts,
-  title,
-  initialDisplayPosts = [],
-  pagination,
-}: ListLayoutProps) {
-  const pathname = usePathname()
-  const tagCounts = tagData as Record<string, number>
-  const tagKeys = Object.keys(tagCounts)
-  const sortedTags = tagKeys.sort((a, b) => tagCounts[b] - tagCounts[a])
+export default function ListLayoutWithTags({ posts, title, filterTag }: ListLayoutProps) {
+  const tagTree = createTagTree(tagData)
 
-  const displayPosts = initialDisplayPosts.length > 0 ? initialDisplayPosts : posts
+  const [selectedTag, setSelectedTag] = useState(filterTag ?? '')
+  const [pageNumber, setPageNumber] = useState(1)
+  const [tagSheetVisible, setTagSheetVisible] = useState(false)
+  const toggleTagSheetVisible = () => {
+    setTagSheetVisible(!tagSheetVisible)
+  }
 
-  // 获取标签的原始文本显示
-  const getOriginalTag = (sluggedTag: string) => {
-    return sluggedTag
+  // 根据 tag 过滤文章
+  const filteredPostsByTag = useMemo(() => {
+    return posts.filter(
+      (post) => post.tags && post.tags.some((t) => t.toLowerCase().includes(selectedTag))
+    )
+  }, [posts, selectedTag])
+
+  // 分页控制
+  const filteredPosts = filteredPostsByTag.slice(
+    POSTS_PER_PAGE * (pageNumber - 1),
+    POSTS_PER_PAGE * pageNumber
+  )
+  const pagination = {
+    currentPage: pageNumber,
+    totalPages: Math.ceil(posts.length / POSTS_PER_PAGE),
   }
 
   return (
     <>
       <div>
-        <div className="pt-6 pb-6">
-          <h1 className="text-3xl leading-9 font-extrabold tracking-tight text-gray-900 sm:hidden sm:text-4xl sm:leading-10 md:text-6xl md:leading-14 dark:text-gray-100">
+        {/* 博客列表 */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-extrabold leading-9 tracking-tight text-gray-900 dark:text-gray-100">
             {title}
           </h1>
-        </div>
-        <div className="flex sm:space-x-24">
-          <div className="hidden h-full max-h-screen max-w-[280px] min-w-[280px] flex-wrap overflow-auto rounded-sm bg-gray-50 pt-5 shadow-md sm:flex dark:bg-gray-900/70 dark:shadow-gray-800/40">
-            <div className="px-6 py-4">
-              {pathname.startsWith('/blog') ? (
-                <h3 className="text-primary-500 font-bold uppercase">All Posts</h3>
-              ) : (
-                <Link
-                  href={`/blog`}
-                  className="hover:text-primary-500 dark:hover:text-primary-500 font-bold text-gray-700 uppercase dark:text-gray-300"
-                >
-                  All Posts
-                </Link>
-              )}
-              <ul>
-                {sortedTags.map((t) => {
-                  // 如果 t 是 slug 形式，可能需要获取原始标签名
-                  // 这里假设 t 已经是可读的标签名（可能来自 tag-data.json）
-                  return (
-                    <li key={t} className="my-3">
-                      {pathname.startsWith('/tags/') && decodeURIComponent(pathname.split('/tags/')[1]) === t ? (
-                        <h3 className="text-primary-500 inline px-3 py-2 text-sm font-bold uppercase">
-                          {`${t} (${tagCounts[t]})`}
-                        </h3>
-                      ) : (
-                        <Link
-                          href={`/tags/${encodeURIComponent(formatTagForUrl(t))}`}
-                          className="hover:text-primary-500 dark:hover:text-primary-500 px-3 py-2 text-sm font-medium text-gray-500 uppercase dark:text-gray-300"
-                          aria-label={`View posts tagged ${t}`}
-                        >
-                          {`${t} (${tagCounts[t]})`}
-                        </Link>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
+
+          <div className="flex items-center space-x-2">
+            {selectedTag !== '' && (
+              <SemiTag size="large" type="light" closable onClose={() => setSelectedTag('')}>
+                {selectedTag}
+              </SemiTag>
+            )}
+            <SemiButton theme="borderless" type="tertiary" onClick={toggleTagSheetVisible}>
+              <span className="flex items-center text-gray-900 dark:text-gray-100">
+                <IconFilter size="small" className="mr-1" />
+                Tags
+              </span>
+            </SemiButton>
           </div>
-          <div>
-            <ul>
-              {displayPosts.map((post) => {
-                const { path, date, title, summary, tags } = post
-                return (
-                  <li key={path} className="py-5">
-                    <article className="flex flex-col space-y-2 xl:space-y-0">
-                      <dl>
-                        <dt className="sr-only">Published on</dt>
-                        <dd className="text-base leading-6 font-medium text-gray-500 dark:text-gray-400">
-                          <time dateTime={date} suppressHydrationWarning>
-                            {formatDate(date, siteMetadata.locale)}
-                          </time>
-                        </dd>
-                      </dl>
-                      <div className="space-y-3">
-                        <div>
-                          <h2 className="text-2xl leading-8 font-bold tracking-tight">
-                            <Link href={`/${path}`} className="text-gray-900 dark:text-gray-100">
-                              {title}
-                            </Link>
-                          </h2>
-                          <div className="flex flex-wrap">
-                            {tags?.map((tag) => <Tag key={tag} text={tag} />)}
-                          </div>
-                        </div>
-                        <div className="prose max-w-none text-gray-500 dark:text-gray-400">
-                          {summary}
+        </div>
+        <div className="flex flex-col justify-between">
+          <ul>
+            {filteredPosts.map((post) => {
+              const { path, date, title, summary, tags } = post
+              return (
+                <li key={path} className="rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-900">
+                  <article className="space-2 flex flex-col p-1 xl:space-y-0">
+                    <div className="space-y-3">
+                      <div>
+                        <h2 className="text-2xl font-bold leading-8 tracking-tight">
+                          <Link
+                            href={`/${path}`}
+                            title={title}
+                            className="text-gray-900 dark:text-gray-100"
+                          >
+                            {title}
+                          </Link>
+                        </h2>
+                        <div className="mt-4 flex justify-between">
+                          <span>
+                            {tags?.map((tag) => (
+                              <Tag key={tag} text={tag} className="mr-2 text-xs" />
+                            ))}
+                          </span>
+                          <dl>
+                            <dt className="sr-only">Published on</dt>
+                            <dd className="text-xs font-medium leading-6 text-gray-500 dark:text-gray-400">
+                              <time dateTime={date}>{formatDate(date, siteMetadata.locale)}</time>
+                            </dd>
+                          </dl>
                         </div>
                       </div>
-                    </article>
-                  </li>
-                )
-              })}
-            </ul>
-            {pagination && pagination.totalPages > 1 && (
-              <Pagination currentPage={pagination.currentPage} totalPages={pagination.totalPages} />
-            )}
-          </div>
+                      <div className="prose max-w-none text-gray-500 dark:text-gray-400">
+                        {summary}
+                      </div>
+                    </div>
+                  </article>
+                </li>
+              )
+            })}
+          </ul>
+          {pagination && pagination.totalPages > 1 && (
+            <Pagination
+              currentPage={pagination.currentPage}
+              totalPages={pagination.totalPages}
+              onPageChange={setPageNumber}
+            />
+          )}
         </div>
       </div>
+
+      {/* tags */}
+      <SemiSideSheet
+        title="All Tags"
+        width={350}
+        visible={tagSheetVisible}
+        onCancel={toggleTagSheetVisible}
+      >
+        <Tree
+          treeData={tagTree}
+          defaultExpandAll
+          renderLabel={(label) => (
+            <span
+              className="px-3 py-2 text-sm font-medium uppercase text-gray-500 hover:text-primary-500 dark:text-gray-300 dark:hover:text-primary-500"
+              aria-label={`View posts tagged ${removeTagBrackets(label as string)}`}
+            >
+              {label}
+            </span>
+          )}
+          onSelect={(_selectedKeys, _selected, selectedNode) => {
+            setPageNumber(1)
+            setSelectedTag(removeTagBrackets(selectedNode.label as string))
+            toggleTagSheetVisible()
+          }}
+        />
+      </SemiSideSheet>
     </>
   )
-} 
+}
