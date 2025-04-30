@@ -10,8 +10,7 @@ import siteMetadata from '@/data/siteMetadata'
 import tagData from 'app/tag-data.json'
 import { createTagTree, removeTagBrackets } from 'utils/tag'
 import { useMemo, useState } from 'react'
-import { Tag as SemiTag, SideSheet as SemiSideSheet, Button as SemiButton } from '@douyinfe/semi-ui'
-import { IconFilter } from '@douyinfe/semi-icons'
+
 
 interface PaginationProps {
   totalPages: number
