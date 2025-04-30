@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { formatTagForUrl } from '@/utils/tag'
+import { formatTagForUrl } from '../utils/tag'
 
 interface Props {
   text: string
