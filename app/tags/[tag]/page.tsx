@@ -5,7 +5,7 @@ import { allBlogs } from 'contentlayer/generated'
 import tagData from 'app/tag-data.json'
 import { genPageMetadata } from 'app/seo'
 import { Metadata } from 'next'
-import { getTagFromUrl } from '@/utils/tag'
+import { getTagFromUrl } from '../../../utils/tag'
 
 const POSTS_PER_PAGE = 5
 
