@@ -4,6 +4,7 @@ import siteMetadata from '@/data/siteMetadata'
 import ListLayout from '@/layouts/ListLayoutWithTags'
 import { allBlogs } from 'contentlayer/generated'
 import tagData from 'app/tag-data.json'
+import slugToOriginal from 'app/slug-to-original.json'
 import { genPageMetadata } from 'app/seo'
 import { Metadata } from 'next'
 
@@ -14,9 +15,11 @@ export async function generateMetadata(props: {
 }): Promise<Metadata> {
   const params = await props.params
   const tag = decodeURIComponent(params.tag)
+  const originalTag = slugToOriginal[tag] || tag
+  
   return genPageMetadata({
-    title: tag,
-    description: `${siteMetadata.title} ${tag} tagged content`,
+    title: originalTag,
+    description: `${siteMetadata.title} ${originalTag} tagged content`,
     alternates: {
       canonical: './',
       types: {
@@ -37,7 +40,10 @@ export const generateStaticParams = async () => {
 
 export default function TagPage({ params }: { params: { tag: string } }) {
   const tag = decodeURIComponent(params.tag)
-  const title = tag[0].toUpperCase() + tag.split(' ').join('-').slice(1)
+  const originalTag = slugToOriginal[tag] || tag
+  
+  const title = originalTag
+  
   const filteredPosts = allCoreContent(
     sortPosts(allBlogs.filter((post) => post.tags && post.tags.map((t) => slug(t)).includes(tag)))
   )
