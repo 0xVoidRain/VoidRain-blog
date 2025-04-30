@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { slug } from 'github-slugger'
+import { formatTagForUrl, getTagFromUrl } from '@/utils/tag'
 import { formatDate } from 'pliny/utils/formatDate'
 import { CoreContent } from 'pliny/utils/contentlayer'
 import type { Blog } from 'contentlayer/generated'
@@ -109,19 +109,21 @@ export default function ListLayoutWithTags({
               )}
               <ul>
                 {sortedTags.map((t) => {
+                  // 如果 t 是 slug 形式，可能需要获取原始标签名
+                  // 这里假设 t 已经是可读的标签名（可能来自 tag-data.json）
                   return (
                     <li key={t} className="my-3">
-                      {decodeURI(pathname.split('/tags/')[1]) === slug(t) ? (
+                      {pathname.startsWith('/tags/') && decodeURIComponent(pathname.split('/tags/')[1]) === t ? (
                         <h3 className="text-primary-500 inline px-3 py-2 text-sm font-bold uppercase">
-                          {`${getOriginalTag(t)} (${tagCounts[t]})`}
+                          {`${t} (${tagCounts[t]})`}
                         </h3>
                       ) : (
                         <Link
-                          href={`/tags/${slug(t)}`}
+                          href={`/tags/${encodeURIComponent(formatTagForUrl(t))}`}
                           className="hover:text-primary-500 dark:hover:text-primary-500 px-3 py-2 text-sm font-medium text-gray-500 uppercase dark:text-gray-300"
-                          aria-label={`View posts tagged ${getOriginalTag(t)}`}
+                          aria-label={`View posts tagged ${t}`}
                         >
-                          {`${getOriginalTag(t)} (${tagCounts[t]})`}
+                          {`${t} (${tagCounts[t]})`}
                         </Link>
                       )}
                     </li>
