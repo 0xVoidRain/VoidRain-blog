@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { formatTagForUrl, getTagFromUrl } from '@/utils/tag'
+import { formatTagForUrl, getTagFromUrl } from '../utils/tag'
 import { formatDate } from 'pliny/utils/formatDate'
 import { CoreContent } from 'pliny/utils/contentlayer'
 import type { Blog } from 'contentlayer/generated'
