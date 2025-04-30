@@ -1,22 +1,50 @@
-/**
- * 标签处理工具函数
- * 
- * 这个文件包含处理博客标签的工具函数，特别是处理中文标签的 URL 友好版本
- */
+import { TreeNodeData } from '@douyinfe/semi-ui/lib/es/tree'
+import { slug } from 'github-slugger'
 
-/**
- * 获取标签的 URL 友好版本
- * 对于中文标签，直接返回原始标签文本，依赖 encodeURIComponent 进行 URL 编码
- * 对于英文标签，可以使用小写和连字符
- */
-export function formatTagForUrl(tag: string): string {
-  return tag;
+export function removeTagBrackets(str: string) {
+  return str.replace(/\(.*\)/, '')
 }
 
-/**
- * 从 URL 参数中获取原始标签文本
- * 对于 URL 中的标签，使用 decodeURIComponent 解码
- */
-export function getTagFromUrl(urlTag: string): string {
-  return decodeURIComponent(urlTag);
-} 
+export function formatTag(tag: string) {
+  return slug(tag.replace(/\//g, '_'))
+}
+
+export function createTagTree(data: Record<string, number>): TreeNodeData[] {
+  const treeData: TreeNodeData[] = []
+  const map = {}
+
+  for (const path in data) {
+    const pathArr = path.split('_')
+    let currentLevel = treeData
+
+    pathArr.forEach((item, index) => {
+      const key = pathArr.slice(0, index + 1).join('_')
+      if (!map[key]) {
+        const node = {
+          label: item,
+          value: item,
+          key: key,
+          count: data[path],
+        }
+        map[key] = node
+        currentLevel.push(node)
+      } else {
+        map[key].count += data[path]
+      }
+
+      if (index !== pathArr.length - 1) {
+        if (!map[key].children) {
+          map[key].children = []
+        }
+        currentLevel = map[key].children
+      }
+    })
+  }
+
+  // 更新标题以包含统计数量
+  for (const key in map) {
+    map[key].label = `${map[key].label}(${map[key].count})`
+  }
+
+  return treeData
+}
