@@ -1,11 +1,12 @@
 import Link from 'next/link'
 import { slug } from 'github-slugger'
+
 interface Props {
   text: string
 }
 
 const Tag = ({ text }: Props) => {
-  const encodedTag = slug(text)
+  const encodedTag = encodeURIComponent(slug(text))
   
   return (
     <Link
@@ -17,4 +18,4 @@ const Tag = ({ text }: Props) => {
   )
 }
 
-export default Tag
+export default Tag 
