@@ -1,0 +1,32 @@
+[
+  {
+    "title": "迷茫时的自我重塑",
+    "summary": "如何在迷茫时期重新认识自己",
+    "tags": ["迷茫", "成长", "自我反思"],
+    "path": "blog/self-reflection"
+  },
+  {
+    "title": "小镇生活纪实",
+    "summary": "记录小镇日常的点点滴滴",
+    "tags": ["生活见闻", "小镇日常"],
+    "path": "blog/small-town-life"
+  },
+  {
+    "title": "Cursor编辑器体验",
+    "summary": "使用AI辅助编程的新体验",
+    "tags": ["开发", "cursor"],
+    "path": "blog/cursor-experience"
+  },
+  {
+    "title": "CSS动画技巧分享",
+    "summary": "创建流畅动画效果的实用技巧",
+    "tags": ["开发", "动画效果"],
+    "path": "blog/css-animation"
+  },
+  {
+    "title": "2024年度目标规划",
+    "summary": "制定明确可行的年度目标",
+    "tags": ["目标", "成长"],
+    "path": "blog/2024-goals"
+  }
+] 
