@@ -10,19 +10,29 @@ const SearchProvider = ({ children }) => {
   const [searchResults, setSearchResults] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchIndex, setSearchIndex] = useState([])
+  const [isLoading, setIsLoading] = useState(true)  // 新增加载状态
+  const [loadError, setLoadError] = useState('')    // 新增错误状态
   const inputRef = useRef(null)
 
   // 加载搜索索引
   useEffect(() => {
     const loadSearchIndex = async () => {
+      setIsLoading(true)
       try {
         const response = await fetch('/search.json')
         if (response.ok) {
           const data = await response.json()
           setSearchIndex(data)
+          setLoadError('')
+        } else {
+          console.error('搜索索引加载失败:', response.status, response.statusText)
+          setLoadError(`加载失败: ${response.status} ${response.statusText}`)
         }
       } catch (error) {
         console.error('加载搜索索引失败:', error)
+        setLoadError(`加载失败: ${error.message}`)
+      } finally {
+        setIsLoading(false)
       }
     }
 
@@ -128,7 +138,19 @@ const SearchProvider = ({ children }) => {
             className="focus:border-primary-500 w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           />
 
-          {searchResults.length > 0 && (
+          {isLoading && (
+            <div className="mt-4 text-center text-gray-500 dark:text-gray-400">
+              加载中...
+            </div>
+          )}
+
+          {loadError && (
+            <div className="mt-4 text-center text-red-500">
+              {loadError}
+            </div>
+          )}
+
+          {!isLoading && !loadError && searchResults.length > 0 && (
             <div className="mt-4 max-h-[60vh] overflow-auto">
               <div className="space-y-2">
                 {searchResults.map((result) => (
@@ -162,7 +184,7 @@ const SearchProvider = ({ children }) => {
             </div>
           )}
 
-          {searchQuery && searchResults.length === 0 && (
+          {!isLoading && !loadError && searchQuery && searchResults.length === 0 && (
             <div className="mt-4 text-center text-gray-500 dark:text-gray-400">
               没有找到相关结果
             </div>
