@@ -10,8 +10,8 @@ const SearchProvider = ({ children }) => {
   const [searchResults, setSearchResults] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchIndex, setSearchIndex] = useState([])
-  const [isLoading, setIsLoading] = useState(true)  // 新增加载状态
-  const [loadError, setLoadError] = useState('')    // 新增错误状态
+  const [isLoading, setIsLoading] = useState(true)  
+  const [loadError, setLoadError] = useState('')    
   const inputRef = useRef(null)
 
   // 加载搜索索引
@@ -19,9 +19,23 @@ const SearchProvider = ({ children }) => {
     const loadSearchIndex = async () => {
       setIsLoading(true)
       try {
-        const response = await fetch('/search.json')
+        // 考虑BASE_PATH环境变量
+        const basePath = process.env.BASE_PATH || '';
+        const searchPath = `${basePath}/search.json`;
+        
+        console.log('尝试加载搜索索引:', searchPath);
+        const response = await fetch(searchPath)
+        
         if (response.ok) {
           const data = await response.json()
+          
+          if (!Array.isArray(data)) {
+            console.error('搜索索引格式错误，期望数组但收到:', typeof data);
+            setLoadError(`索引格式错误: 期望数组但收到 ${typeof data}`);
+            return;
+          }
+          
+          console.log(`成功加载${data.length}条搜索索引`);
           setSearchIndex(data)
           setLoadError('')
         } else {
@@ -147,6 +161,14 @@ const SearchProvider = ({ children }) => {
           {loadError && (
             <div className="mt-4 text-center text-red-500">
               {loadError}
+              <div className="mt-2 text-sm">
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="underline hover:text-red-400"
+                >
+                  刷新页面
+                </button>
+              </div>
             </div>
           )}
 
@@ -175,7 +197,12 @@ const SearchProvider = ({ children }) => {
                     </div>
                     {result.tags && (
                       <div className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        {result.tags.join(', ')}
+                        {Array.isArray(result.tags) ? result.tags.join(', ') : result.tags}
+                      </div>
+                    )}
+                    {result.summary && (
+                      <div className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                        {result.summary}
                       </div>
                     )}
                   </div>
