@@ -5,13 +5,15 @@
   "scripts": {
     "start": "next dev",
     "dev": "cross-env INIT_CWD=$PWD next dev",
-    "build": "next build",
+    "build": "next build --no-lint",
     "serve": "next start",
     "analyze": "cross-env ANALYZE=true next build",
     "lint": "next lint --fix --dir pages --dir app --dir components --dir lib --dir layouts --dir scripts",
     "prepare": "husky"
   },
   "dependencies": {
+    "@douyinfe/semi-icons": "^2.55.1",
+    "@douyinfe/semi-ui": "^2.55.1",
     "@headlessui/react": "2.2.0",
     "@next/bundle-analyzer": "15.1.4",
     "@tailwindcss/forms": "^0.5.9",
