@@ -113,7 +113,7 @@ export default function ListLayoutWithTags({ posts, title, filterTag }: ListLayo
             <SemiButton theme="borderless" type="tertiary" onClick={toggleTagSheetVisible}>
               <span className="flex items-center text-gray-900 dark:text-gray-100">
                 <IconFilter size="small" className="mr-1" />
-                Tags
+                标签
               </span>
             </SemiButton>
           </div>
@@ -171,7 +171,7 @@ export default function ListLayoutWithTags({ posts, title, filterTag }: ListLayo
 
       {/* tags */}
       <SemiSideSheet
-        title="All Tags"
+        title="所有标签"
         width={350}
         visible={tagSheetVisible}
         onCancel={toggleTagSheetVisible}
