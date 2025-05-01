@@ -427,7 +427,7 @@ export default function DataFlowBackground() {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
     // 设置背景
-    ctx.fillStyle = theme === 'dark' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(0, 0, 0, 0.1)'
+    ctx.fillStyle = theme === 'dark' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0)'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
     // 绘制网格
@@ -538,23 +538,14 @@ export default function DataFlowBackground() {
         cancelAnimationFrame(requestRef.current)
       }
     }
-  }, [dimensions, theme])
+  }, [dimensions])
 
   const [mounted, setMounted] = useState(false)
 
   // 确保组件仅在客户端渲染
   useEffect(() => {
     setMounted(true)
-
-    // 以下是你的 canvas 初始化和动画代码
-    if (canvasRef.current) {
-      // ... 你的现有 canvas 代码 ...
-    }
-
-    return () => {
-      // 清理代码
-    }
-  }, [theme])
+  }, [])
 
   // 仅在客户端渲染
   if (!mounted) return null
