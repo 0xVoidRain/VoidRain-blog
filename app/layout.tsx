@@ -11,8 +11,6 @@ import siteMetadata from '@/data/siteMetadata'
 import { ThemeProviders } from './theme-providers'
 import { Metadata } from 'next'
 import ClientDataFlowBackground from '@/components/ClientDataFlowBackground'
-import CustomSearch from '@/components/CustomSearch'
-import Debug from '@/components/Debug'
 
 const space_grotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -103,10 +101,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProviders>
           <ClientDataFlowBackground />
           <Analytics analyticsConfig={siteMetadata.analytics as AnalyticsConfig} />
-          <Debug />
           <SectionContainer>
             <LayoutWrapper>
-              <CustomSearch>{children}</CustomSearch>
+              {children}
             </LayoutWrapper>
           </SectionContainer>
         </ThemeProviders>
