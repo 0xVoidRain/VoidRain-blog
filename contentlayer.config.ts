@@ -90,11 +90,27 @@ function createSearchIndex(allBlogs) {
     siteMetadata?.search?.provider === 'kbar' &&
     siteMetadata.search.kbarConfig.searchDocumentsPath
   ) {
+    // 确保博客内容包含summary字段
+    const processedBlogs = allBlogs.map(blog => {
+      if (!blog.summary && blog.body && blog.body.raw) {
+        // 如果没有summary字段，从raw内容生成
+        const rawContent = blog.body.raw;
+        const cleanedContent = rawContent.replace(/<\/?[^>]+(>|$)|[#>\-*+]/g, '');
+        const collapsedContent = cleanedContent.replace(/\s\s+/g, ' ');
+        blog.summary = `${collapsedContent.substring(0, 150)}...`;
+      }
+      return blog;
+    });
+    
+    // 生成并保存搜索索引
+    const searchContent = JSON.stringify(allCoreContent(sortPosts(processedBlogs)));
     writeFileSync(
       `public/${siteMetadata.search.kbarConfig.searchDocumentsPath}`,
-      JSON.stringify(allCoreContent(sortPosts(allBlogs)))
-    )
-    console.log('本地搜索索引已生成...')
+      searchContent
+    );
+    console.log('本地搜索索引已生成，共 ' + allBlogs.length + ' 篇文章');
+  } else {
+    console.log('搜索索引未生成，请检查siteMetadata中的search配置');
   }
 }
 
