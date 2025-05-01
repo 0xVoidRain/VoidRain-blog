@@ -102,9 +102,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ClientDataFlowBackground />
           <Analytics analyticsConfig={siteMetadata.analytics as AnalyticsConfig} />
           <SectionContainer>
-            <LayoutWrapper>
-              {children}
-            </LayoutWrapper>
+            <SearchProvider searchConfig={siteMetadata.search as SearchConfig}>
+              <LayoutWrapper>
+                {children}
+              </LayoutWrapper>
+            </SearchProvider>
           </SectionContainer>
         </ThemeProviders>
       </body>
