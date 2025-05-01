@@ -21,6 +21,14 @@ export default function ClientDataFlowBackground() {
   
   useEffect(() => {
     setIsMounted(true)
+    
+    // 强制重新渲染一次，以确保动画组件正确初始化
+    const timer = setTimeout(() => {
+      setIsMounted(false)
+      setTimeout(() => setIsMounted(true), 50)
+    }, 100)
+    
+    return () => clearTimeout(timer)
   }, [])
   
   if (!isMounted) {

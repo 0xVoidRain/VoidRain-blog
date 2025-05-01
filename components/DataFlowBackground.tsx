@@ -437,6 +437,7 @@ export default function DataFlowBackground() {
     drawRaindrops(ctx, time, canvas.height)
 
     // 继续动画循环
+    timeRef.current = time
     requestRef.current = requestAnimationFrame(animate)
   }
 
@@ -516,44 +517,53 @@ export default function DataFlowBackground() {
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const canvas = canvasRef.current
-    if (!canvas) return
+    // 清理旧的动画帧
+    if (requestRef.current) {
+      cancelAnimationFrame(requestRef.current)
+      requestRef.current = undefined
+    }
 
-    // 设置画布尺寸
-    canvas.width = dimensions.width
-    canvas.height = dimensions.height
+    // 延迟一点初始化，以确保组件完全加载
+    setTimeout(() => {
+      const canvas = canvasRef.current
+      if (!canvas) return
 
-    // 创建网格
-    gridRef.current = createGrid(dimensions.width, dimensions.height)
+      // 设置画布尺寸
+      canvas.width = dimensions.width
+      canvas.height = dimensions.height
 
-    // 创建雨滴
-    raindropRef.current = createRaindrops(20, dimensions.width, dimensions.height)
+      // 创建网格
+      gridRef.current = createGrid(dimensions.width, dimensions.height)
 
-    // 开始动画循环
-    requestRef.current = requestAnimationFrame(animate)
+      // 创建雨滴
+      raindropRef.current = createRaindrops(20, dimensions.width, dimensions.height)
+
+      // 开始动画循环
+      requestRef.current = requestAnimationFrame(animate)
+    }, 50)
 
     // 清理
     return () => {
       if (requestRef.current) {
         cancelAnimationFrame(requestRef.current)
+        requestRef.current = undefined
       }
     }
-  }, [dimensions])
-
-  // 确保动画函数在主题变化时更新
-  useEffect(() => {
-    // 强制重新绘制
-    if (canvasRef.current && requestRef.current) {
-      cancelAnimationFrame(requestRef.current)
-      requestRef.current = requestAnimationFrame(animate)
-    }
-  }, [theme])
+  }, [dimensions, theme]) // 保留theme依赖，确保主题变化时重新初始化
 
   const [mounted, setMounted] = useState(false)
 
   // 确保组件仅在客户端渲染
   useEffect(() => {
     setMounted(true)
+    
+    // 在组件卸载时清理
+    return () => {
+      if (requestRef.current) {
+        cancelAnimationFrame(requestRef.current)
+        requestRef.current = undefined
+      }
+    }
   }, [])
 
   // 仅在客户端渲染
