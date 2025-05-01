@@ -540,6 +540,15 @@ export default function DataFlowBackground() {
     }
   }, [dimensions])
 
+  // 确保动画函数在主题变化时更新
+  useEffect(() => {
+    // 强制重新绘制
+    if (canvasRef.current && requestRef.current) {
+      cancelAnimationFrame(requestRef.current)
+      requestRef.current = requestAnimationFrame(animate)
+    }
+  }, [theme])
+
   const [mounted, setMounted] = useState(false)
 
   // 确保组件仅在客户端渲染
