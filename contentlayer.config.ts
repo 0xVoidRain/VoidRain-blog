@@ -4,12 +4,9 @@ import readingTime from 'reading-time'
 import { slug } from 'github-slugger'
 import path from 'path'
 import { fromHtmlIsomorphic } from 'hast-util-from-html-isomorphic'
-import { formatTagForUrl } from './utils/tag'
-
 // Remark packages
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
-import { remarkAlert } from 'remark-github-blockquote-alert'
 import {
   remarkExtractFrontmatter,
   remarkCodeTitles,
@@ -20,13 +17,12 @@ import {
 import rehypeSlug from 'rehype-slug'
 import rehypeAutolinkHeadings from 'rehype-autolink-headings'
 import rehypeKatex from 'rehype-katex'
-import rehypeKatexNoTranslate from 'rehype-katex-notranslate'
 import rehypeCitation from 'rehype-citation'
 import rehypePrismPlus from 'rehype-prism-plus'
 import rehypePresetMinify from 'rehype-preset-minify'
 import siteMetadata from './data/siteMetadata'
 import { allCoreContent, sortPosts } from 'pliny/utils/contentlayer.js'
-import prettier from 'prettier'
+import { formatTag } from './utils/tag'
 
 const root = process.cwd()
 const isProduction = process.env.NODE_ENV === 'production'
@@ -58,31 +54,44 @@ const computedFields: ComputedFields = {
     type: 'string',
     resolve: (doc) => doc._raw.sourceFilePath,
   },
-  toc: { type: 'json', resolve: (doc) => extractTocHeadings(doc.body.raw) },
+  toc: { type: 'string', resolve: (doc) => extractTocHeadings(doc.body.raw) },
+  summary: {
+    type: 'string',
+    resolve: (doc) => {
+      // Get the raw content of the document
+      let rawContent = doc.body.raw
+
+      // Remove markdown formatting characters and HTML tags if necessary
+      // This includes # for headers, > for blockquotes, - for lists, etc.
+      // You can add other markdown characters to the regex if needed
+      rawContent = rawContent.replace(/<\/?[^>]+(>|$)|[#>\-*+]/g, '')
+
+      // Collapse multiple spaces into a single space
+      rawContent = rawContent.replace(/\s\s+/g, ' ')
+
+      return `${rawContent.substring(0, 97)} ...` // Return the first 100 characters
+    },
+  },
 }
 
 /**
  * Count the occurrences of all tags across blog posts and write to json file
  */
-async function createTagCount(allBlogs) {
+function createTagCount(allBlogs) {
   const tagCount: Record<string, number> = {}
-  
   allBlogs.forEach((file) => {
     if (file.tags && (!isProduction || file.draft !== true)) {
-      file.tags.forEach((tag) => {
-        // 使用原始标签文本作为键
-        if (tag in tagCount) {
-          tagCount[tag] += 1
+      file.tags.forEach((tag: string) => {
+        const formattedTag = formatTag(tag)
+        if (formattedTag in tagCount) {
+          tagCount[formattedTag] += 1
         } else {
-          tagCount[tag] = 1
+          tagCount[formattedTag] = 1
         }
       })
     }
   })
-  
-  // 写入 tag-data.json
-  const formatted = await prettier.format(JSON.stringify(tagCount, null, 2), { parser: 'json' })
-  writeFileSync('./app/tag-data.json', formatted)
+  writeFileSync('./app/tag-data.json', JSON.stringify(tagCount))
 }
 
 function createSearchIndex(allBlogs) {
@@ -90,27 +99,11 @@ function createSearchIndex(allBlogs) {
     siteMetadata?.search?.provider === 'kbar' &&
     siteMetadata.search.kbarConfig.searchDocumentsPath
   ) {
-    // 确保博客内容包含summary字段
-    const processedBlogs = allBlogs.map(blog => {
-      if (!blog.summary && blog.body && blog.body.raw) {
-        // 如果没有summary字段，从raw内容生成
-        const rawContent = blog.body.raw;
-        const cleanedContent = rawContent.replace(/<\/?[^>]+(>|$)|[#>\-*+]/g, '');
-        const collapsedContent = cleanedContent.replace(/\s\s+/g, ' ');
-        blog.summary = `${collapsedContent.substring(0, 150)}...`;
-      }
-      return blog;
-    });
-    
-    // 生成并保存搜索索引
-    const searchContent = JSON.stringify(allCoreContent(sortPosts(processedBlogs)));
     writeFileSync(
       `public/${siteMetadata.search.kbarConfig.searchDocumentsPath}`,
-      searchContent
-    );
-    console.log('本地搜索索引已生成，共 ' + allBlogs.length + ' 篇文章');
-  } else {
-    console.log('搜索索引未生成，请检查siteMetadata中的search配置');
+      JSON.stringify(allCoreContent(sortPosts(allBlogs)))
+    )
+    console.log('Local search index generated...')
   }
 }
 
@@ -130,6 +123,7 @@ export const Blog = defineDocumentType(() => ({
     layout: { type: 'string' },
     bibliography: { type: 'string' },
     canonicalUrl: { type: 'string' },
+    banner_img: { type: 'string' }, // TODO 待优化
   },
   computedFields: {
     ...computedFields,
@@ -160,7 +154,6 @@ export const Authors = defineDocumentType(() => ({
     company: { type: 'string' },
     email: { type: 'string' },
     twitter: { type: 'string' },
-    bluesky: { type: 'string' },
     linkedin: { type: 'string' },
     github: { type: 'string' },
     layout: { type: 'string' },
@@ -168,8 +161,7 @@ export const Authors = defineDocumentType(() => ({
   computedFields,
 }))
 
-// 删除第一个默认导出，只保留最后一个
-const source = makeSource({
+export default makeSource({
   contentDirPath: 'data',
   documentTypes: [Blog, Authors],
   mdx: {
@@ -180,7 +172,6 @@ const source = makeSource({
       remarkCodeTitles,
       remarkMath,
       remarkImgToJsx,
-      remarkAlert,
     ],
     rehypePlugins: [
       rehypeSlug,
@@ -195,7 +186,6 @@ const source = makeSource({
         },
       ],
       rehypeKatex,
-      rehypeKatexNoTranslate,
       [rehypeCitation, { path: path.join(root, 'data') }],
       [rehypePrismPlus, { defaultLanguage: 'js', ignoreMissing: true }],
       rehypePresetMinify,
@@ -207,5 +197,3 @@ const source = makeSource({
     createSearchIndex(allBlogs)
   },
 })
-
-export default source
