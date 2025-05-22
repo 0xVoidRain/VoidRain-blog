@@ -10,7 +10,7 @@ const projectsData: Project[] = [
     title: '垂直管道雾培鱼菜共生',
     description: `改造自越南博主的水培鱼菜共生系统.`,
     imgSrc: '/static/images/pipe.png',
-    href: '/blog/荒田的试验：2022 年的垂直雾培鱼菜共生梦.mdx',
+    href: '/blog/荒田的试验：2022 年的垂直雾培鱼菜共生梦',
   },
   {
     title: '建设中',
