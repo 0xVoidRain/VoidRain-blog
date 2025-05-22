@@ -7,10 +7,10 @@ interface Project {
 
 const projectsData: Project[] = [
   {
-    title: '建设中',
-    description: `建设中.`,
-    imgSrc: '/static/images/',
-    href: '',
+    title: '垂直管道雾培鱼菜共生',
+    description: `改造自越南博主的水培鱼菜共生系统.`,
+    imgSrc: '/static/images/pipe.png',
+    href: '/blog/荒田的试验：2022 年的垂直雾培鱼菜共生梦.mdx',
   },
   {
     title: '建设中',
